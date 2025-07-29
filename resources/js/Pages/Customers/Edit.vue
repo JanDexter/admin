@@ -3,6 +3,10 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { computed, watch } from 'vue';
 
+const props = defineProps({
+    customer: Object,
+});
+
 const serviceTypes = {
     'CONFERENCE ROOM': 350,
     'SHARED SPACE': 40,
@@ -12,28 +16,25 @@ const serviceTypes = {
 };
 
 const form = useForm({
-    name: '',
-    email: '',
-    phone: '',
-    company: '',
-    address: '',
-    status: 'active',
-    service_type: '',
-    service_price: 0,
-    service_start_time: '',
-    service_end_time: '',
-    amount_paid: 0,
+    name: props.customer.name || '',
+    email: props.customer.email || '',
+    phone: props.customer.phone || '',
+    company: props.customer.company || '',
+    address: props.customer.address || '',
+    status: props.customer.status || 'active',
+    service_type: props.customer.service_type || '',
+    service_price: props.customer.service_price || 0,
+    service_start_time: props.customer.service_start_time ? props.customer.service_start_time.slice(0, 16) : '',
+    service_end_time: props.customer.service_end_time ? props.customer.service_end_time.slice(0, 16) : '',
+    amount_paid: props.customer.amount_paid || 0,
 });
 
 // Watch for service type changes to auto-update price
 watch(() => form.service_type, (newServiceType) => {
     if (newServiceType && serviceTypes[newServiceType]) {
         form.service_price = serviceTypes[newServiceType];
-        // Auto-set amount paid to service price
-        form.amount_paid = serviceTypes[newServiceType];
     } else {
         form.service_price = 0;
-        form.amount_paid = 0;
     }
 });
 
@@ -42,17 +43,17 @@ const formattedServicePrice = computed(() => {
 });
 
 const submit = () => {
-    form.post(route('customers.store'));
+    form.put(route('customers.update', props.customer.id));
 };
 </script>
 
 <template>
-    <Head title="Add Customer" />
+    <Head title="Edit Customer" />
 
     <AuthenticatedLayout>
         <template #header>
             <div class="flex justify-between items-center">
-                <h2 class="font-semibold text-xl text-gray-800 leading-tight">Add Customer</h2>
+                <h2 class="font-semibold text-xl text-gray-800 leading-tight">Edit Customer</h2>
                 <Link
                     :href="route('dashboard')"
                     class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded"
@@ -251,8 +252,8 @@ const submit = () => {
                                     :disabled="form.processing"
                                     class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50"
                                 >
-                                    <span v-if="form.processing">Creating...</span>
-                                    <span v-else>Create Customer</span>
+                                    <span v-if="form.processing">Updating...</span>
+                                    <span v-else>Update Customer</span>
                                 </button>
                             </div>
                         </form>

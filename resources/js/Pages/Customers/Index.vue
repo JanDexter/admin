@@ -29,12 +29,6 @@ const formatDate = (dateString) => {
         day: 'numeric' 
     });
 };
-
-const deleteCustomer = (customer) => {
-    if (confirm(`Are you sure you want to delete ${customer.name}?`)) {
-        router.delete(route('customers.destroy', customer.id));
-    }
-};
 </script>
 
 <template>
@@ -171,12 +165,6 @@ const deleteCustomer = (customer) => {
                                             >
                                                 Edit
                                             </Link>
-                                            <button
-                                                @click="deleteCustomer(customer)"
-                                                class="text-red-600 hover:text-red-500"
-                                            >
-                                                Delete
-                                            </button>
                                         </div>
                                     </td>
                                 </tr>

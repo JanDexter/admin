@@ -21,7 +21,81 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
+        'is_active',
     ];
+
+    /**
+     * Role constants
+     */
+    const ROLE_CUSTOMER = 'customer';
+    const ROLE_STAFF = 'staff';
+    const ROLE_ADMIN = 'admin';
+
+    /**
+     * Get all available roles
+     */
+    public static function getRoles()
+    {
+        return [
+            self::ROLE_CUSTOMER => 'Customer',
+            self::ROLE_STAFF => 'Staff',
+            self::ROLE_ADMIN => 'Admin',
+        ];
+    }
+
+    /**
+     * Check if user has a specific role
+     */
+    public function hasRole($role)
+    {
+        return $this->role === $role;
+    }
+
+    /**
+     * Check if user is admin
+     */
+    public function isAdmin()
+    {
+        return $this->hasRole(self::ROLE_ADMIN);
+    }
+
+    /**
+     * Check if user is staff
+     */
+    public function isStaff()
+    {
+        return $this->hasRole(self::ROLE_STAFF);
+    }
+
+    /**
+     * Check if user is customer
+     */
+    public function isCustomer()
+    {
+        return $this->hasRole(self::ROLE_CUSTOMER);
+    }
+
+    /**
+     * Get formatted role name
+     */
+    public function getFormattedRoleAttribute()
+    {
+        return ucfirst($this->role);
+    }
+
+    /**
+     * Get role color for UI display
+     */
+    public function getRoleColorAttribute()
+    {
+        return match($this->role) {
+            self::ROLE_ADMIN => 'bg-red-100 text-red-800',
+            self::ROLE_STAFF => 'bg-blue-100 text-blue-800',
+            self::ROLE_CUSTOMER => 'bg-green-100 text-green-800',
+            default => 'bg-gray-100 text-gray-800'
+        };
+    }
 
     /**
      * The attributes that should be hidden for serialization.
@@ -43,6 +117,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_active' => 'boolean',
         ];
     }
 }

@@ -33,11 +33,16 @@ class CustomerController extends Controller
             'company' => 'nullable|string|max:255',
             'address' => 'nullable|string',
             'status' => 'required|in:active,inactive',
+            'service_type' => 'nullable|string|in:CONFERENCE ROOM,SHARED SPACE,EXCLUSIVE SPACE,PRIVATE SPACE,DRAFTING TABLE',
+            'service_price' => 'nullable|numeric|min:0',
+            'service_start_time' => 'nullable|date',
+            'service_end_time' => 'nullable|date|after:service_start_time',
+            'amount_paid' => 'nullable|numeric|min:0',
         ]);
 
         Customer::create($validated);
 
-        return redirect()->route('customers.index')
+        return redirect()->route('dashboard')
             ->with('success', 'Customer created successfully.');
     }
 
@@ -68,19 +73,16 @@ class CustomerController extends Controller
             'company' => 'nullable|string|max:255',
             'address' => 'nullable|string',
             'status' => 'required|in:active,inactive',
+            'service_type' => 'nullable|string|in:CONFERENCE ROOM,SHARED SPACE,EXCLUSIVE SPACE,PRIVATE SPACE,DRAFTING TABLE',
+            'service_price' => 'nullable|numeric|min:0',
+            'service_start_time' => 'nullable|date',
+            'service_end_time' => 'nullable|date|after:service_start_time',
+            'amount_paid' => 'nullable|numeric|min:0',
         ]);
 
         $customer->update($validated);
 
-        return redirect()->route('customers.index')
+        return redirect()->route('dashboard')
             ->with('success', 'Customer updated successfully.');
-    }
-
-    public function destroy(Customer $customer)
-    {
-        $customer->delete();
-
-        return redirect()->route('customers.index')
-            ->with('success', 'Customer deleted successfully.');
     }
 }
