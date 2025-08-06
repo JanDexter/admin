@@ -1,0 +1,41 @@
+# DevSecOps Configuration
+
+## Static Analysis
+includes:
+    - app
+    - config
+    - database
+    - routes
+
+excludes:
+    - vendor
+    - node_modules
+    - storage
+    - bootstrap/cache
+
+## Security Scanning
+security:
+    level: 8
+    checkForDeadCode: true
+    checkMixedKeys: false
+
+## Code Quality Standards
+phpstan:
+    level: 8
+    paths:
+        - app
+        - config
+        - database
+        - routes
+    excludePaths:
+        - vendor
+        - node_modules
+        
+## Test Coverage
+coverage:
+    minimum: 80
+    exclude:
+        - bootstrap
+        - config
+        - database/migrations
+        - vendor

@@ -1,0 +1,137 @@
+name: DevSecOps CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    name: Security Analysis
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.4'
+        extensions: mbstring, xml, ctype, json, openssl, pdo, mysql
+        
+    - name: Cache Composer packages
+      id: composer-cache
+      uses: actions/cache@v3
+      with:
+        path: vendor
+        key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-php-
+          
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress --no-suggest
+      
+    - name: Security Audit - Composer
+      run: composer audit
+      
+    - name: Security Audit - NPM
+      run: |
+        npm install
+        npm audit --audit-level=moderate
+        
+    - name: Static Analysis - PHPStan
+      run: |
+        composer require --dev phpstan/phpstan
+        ./vendor/bin/phpstan analyse --memory-limit=2G
+        
+    - name: Code Quality - PHP CS Fixer
+      run: |
+        composer require --dev friendsofphp/php-cs-fixer
+        ./vendor/bin/php-cs-fixer fix --dry-run --diff
+        
+    - name: SAST - Psalm
+      run: |
+        composer require --dev psalm/psalm
+        ./vendor/bin/psalm --init
+        ./vendor/bin/psalm
+        
+  test:
+    runs-on: ubuntu-latest
+    name: Testing Suite
+    
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: testing
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+        
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.4'
+        extensions: mbstring, xml, ctype, json, openssl, pdo, mysql
+        
+    - name: Install dependencies
+      run: |
+        composer install --prefer-dist --no-progress --no-suggest
+        npm install
+        
+    - name: Setup Environment
+      run: |
+        cp .env.example .env.testing
+        php artisan key:generate --env=testing
+        
+    - name: Run Database Migrations
+      run: php artisan migrate --env=testing
+      env:
+        DB_CONNECTION: mysql
+        DB_HOST: 127.0.0.1
+        DB_PORT: 3306
+        DB_DATABASE: testing
+        DB_USERNAME: root
+        DB_PASSWORD: password
+        
+    - name: Execute tests
+      run: php artisan test --coverage
+      
+    - name: Frontend Tests
+      run: npm run test
+      
+  build:
+    runs-on: ubuntu-latest
+    name: Build & Deploy
+    needs: [security-scan, test]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.4'
+        
+    - name: Install dependencies
+      run: |
+        composer install --optimize-autoloader --no-dev
+        npm install
+        
+    - name: Build assets
+      run: npm run build
+      
+    - name: Generate deployment artifact
+      run: tar -czf application.tar.gz --exclude=node_modules --exclude=.git .
+      
+    - name: Store artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: application-artifact
+        path: application.tar.gz
