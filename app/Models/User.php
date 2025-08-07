@@ -120,4 +120,28 @@ class User extends Authenticatable
             'is_active' => 'boolean',
         ];
     }
+
+    /**
+     * Get the customer record associated with this user (if they are a customer)
+     */
+    public function customer()
+    {
+        return $this->hasOne(Customer::class);
+    }
+
+    /**
+     * Get tasks assigned to this user
+     */
+    public function tasks()
+    {
+        return $this->hasMany(Task::class);
+    }
+
+    /**
+     * Get services managed by this user
+     */
+    public function services()
+    {
+        return $this->hasMany(Service::class);
+    }
 }

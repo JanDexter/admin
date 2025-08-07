@@ -36,7 +36,7 @@ class AuthServiceProvider extends ServiceProvider
 
         // Define gate for customer access
         Gate::define('customer-access', function (User $user) {
-            return $user->isCustomer();
+            return $user->isAdmin() || $user->isCustomer();
         });
     }
 }

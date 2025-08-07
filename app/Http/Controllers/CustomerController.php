@@ -10,7 +10,8 @@ class CustomerController extends Controller
 {
     public function index()
     {
-        $customers = Customer::withCount('tasks')
+        $customers = Customer::with('user')
+            ->withCount('tasks')
             ->orderBy('created_at', 'desc')
             ->paginate(15);
 
