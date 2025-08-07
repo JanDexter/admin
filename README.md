@@ -1,33 +1,48 @@
 # Customer Management Dashboard
 
 A modern, full-featured web application built with Laravel 11, Inertia.js, and Vue.js for comprehensive customer relationship management. This application provides a streamlined admin interface focused on customer data management and co-workspace service reservations.
+w
+## Preview
+![Customer Management Dashboard Preview 1](public/img/Screenshot%202025-08-07%20105409.png)
+![Customer Management Dashboard Preview 2](public/img/Screenshot%202025-08-07%20105413.png)
+
+## 🚀 About This Project
+
+This project is a Customer Management Dashboard built with the TALL stack (Tailwind CSS, Alpine.js, Laravel, Livewire) and other modern technologies. It provides a comprehensive interface for managing customers, tasks, services, and users.
 
 ## ✨ Features
 
-- 🔐 **Secure Authentication** - User registration, login, and profile management with Laravel Breeze
-- 👥 **Customer Management** - Secure CRU operations for customer data (Create, Read, Update) - Delete removed for data integrity
-- 🏢 **Service Management** - Predefined co-workspace services with automatic pricing
-- � **User Management** - Role-based access control with admin, staff, and customer roles
-- �📊 **Unified Dashboard** - Real-time overview with customer statistics and management
-- 🎨 **Modern UI/UX** - Responsive design with Tailwind CSS and smooth animations
-- ⚡ **Real-time Interface** - Single Page Application experience with Inertia.js and Vue.js
-- 📱 **Progressive Web App** - Installable app with offline support and push notifications
-- 🔄 **Offline Functionality** - Works offline with background synchronization
-- 🏠 **Quick Access Shortcuts** - Fast navigation to key features
-- 💰 **Automatic Pricing** - Service prices auto-populate based on selection
+*   **User Roles:** Admin, Staff, and Customer roles with distinct permissions.
+*   **Customer Management:** CRUD operations for customer records.
+*   **Task Management:** Assign and track tasks related to customers.
+*   **Service Management:** Define and manage services offered.
+*   **User Management:** Admin interface to manage users.
+*   **Responsive UI:** Built with Tailwind CSS for a mobile-first experience.
+*   **PWA Ready:** Can be installed as a Progressive Web App.
 
-## 🛠 Tech Stack
+## 🛠️ Tech Stack
 
-- **Backend Framework**: Laravel 11 (PHP 8.4)
-- **Frontend Framework**: Vue.js 3 with Composition API
-- **SPA Solution**: Inertia.js for seamless server-client communication
-- **Database**: MySQL 9.4.0 with Eloquent ORM
-- **Styling**: Tailwind CSS with custom components
-- **Build Tool**: Vite for fast development and optimized builds
-- **Testing**: PHPUnit for comprehensive test coverage
-- **Authentication**: Laravel Breeze (Session-based)
-- **PWA**: Service Worker, Web App Manifest, Background Sync
-- **Package Manager**: Composer (PHP) + npm (JavaScript)
+The application is built using the following technologies:
+
+*   **Backend:** Laravel (PHP)
+*   **Frontend:** Vue.js with Inertia.js
+*   **Styling:** Tailwind CSS
+*   **Database:** MySQL
+*   **Development:** Vite, Docker
+
+### Why this stack?
+
+#### Pros:
+*   **Rapid Development:** Laravel's rich ecosystem and conventions, combined with Vite's fast asset bundling, significantly speed up development time.
+*   **Modern Frontend without API Hassle:** Inertia.js allows for the creation of a modern, single-page application experience using server-side routing and controllers, avoiding the complexity of building and maintaining a separate API.
+*   **Scalability:** Laravel is highly scalable, and using a robust database like MySQL ensures the application can handle growth.
+*   **Consistent UI:** Tailwind CSS provides a utility-first approach that makes it easy to build complex, responsive, and consistent user interfaces.
+*   **Containerization:** Docker provides a consistent and isolated development environment, simplifying setup and deployment.
+
+#### Cons:
+*   **Learning Curve:** For developers new to Laravel or Vue.js, there can be a learning curve.
+*   **Monolithic Structure:** While Inertia.js bridges the gap, the application is more tightly coupled than a separate frontend and backend API, which could be a drawback for projects requiring native mobile clients.
+*   **State Management:** For highly complex and interactive pages, managing state in Vue.js might become more challenging compared to more opinionated frameworks.
 
 ## 📋 Prerequisites
 
