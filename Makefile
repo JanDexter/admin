@@ -100,6 +100,16 @@ security-fix: ## Fix security vulnerabilities
 	$(COMPOSER) audit --fix
 	$(NPM) audit fix
 
+security-tests: ## Run custom security tests
+	$(ARTISAN) test tests/Feature/Security --verbose
+	@echo "✅ Security tests complete"
+
+security-full: ## Run comprehensive security analysis
+	$(COMPOSER) audit
+	$(NPM) audit
+	$(ARTISAN) test tests/Feature/Security --verbose
+	@echo "✅ Full security analysis complete"
+
 ## Docker
 docker-build: ## Build Docker containers
 	$(DOCKER_COMPOSE) build

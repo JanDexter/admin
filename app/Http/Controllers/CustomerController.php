@@ -28,22 +28,19 @@ class CustomerController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
+            'company_name' => 'required|string|max:255',
+            'contact_person' => 'required|string|max:255',
             'email' => 'required|email|unique:customers,email',
-            'phone' => 'nullable|string|max:20',
-            'company' => 'nullable|string|max:255',
+            'phone' => 'required|string|max:20',
             'address' => 'nullable|string',
-            'status' => 'required|in:active,inactive',
-            'service_type' => 'nullable|string|in:CONFERENCE ROOM,SHARED SPACE,EXCLUSIVE SPACE,PRIVATE SPACE,DRAFTING TABLE',
-            'service_price' => 'nullable|numeric|min:0',
-            'service_start_time' => 'nullable|date',
-            'service_end_time' => 'nullable|date|after:service_start_time',
-            'amount_paid' => 'nullable|numeric|min:0',
+            'website' => 'nullable|url',
+            'status' => 'required|in:active,inactive,pending',
+            'notes' => 'nullable|string',
         ]);
 
         Customer::create($validated);
 
-        return redirect()->route('dashboard')
+        return redirect()->route('customers.index')
             ->with('success', 'Customer created successfully.');
     }
 
@@ -68,22 +65,19 @@ class CustomerController extends Controller
     public function update(Request $request, Customer $customer)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
+            'company_name' => 'required|string|max:255',
+            'contact_person' => 'required|string|max:255',
             'email' => 'required|email|unique:customers,email,' . $customer->id,
-            'phone' => 'nullable|string|max:20',
-            'company' => 'nullable|string|max:255',
+            'phone' => 'required|string|max:20',
             'address' => 'nullable|string',
-            'status' => 'required|in:active,inactive',
-            'service_type' => 'nullable|string|in:CONFERENCE ROOM,SHARED SPACE,EXCLUSIVE SPACE,PRIVATE SPACE,DRAFTING TABLE',
-            'service_price' => 'nullable|numeric|min:0',
-            'service_start_time' => 'nullable|date',
-            'service_end_time' => 'nullable|date|after:service_start_time',
-            'amount_paid' => 'nullable|numeric|min:0',
+            'website' => 'nullable|url',
+            'status' => 'required|in:active,inactive,pending',
+            'notes' => 'nullable|string',
         ]);
 
         $customer->update($validated);
 
-        return redirect()->route('dashboard')
+        return redirect()->route('customers.index')
             ->with('success', 'Customer updated successfully.');
     }
 }

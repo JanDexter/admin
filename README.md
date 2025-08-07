@@ -29,6 +29,30 @@ A modern, full-featured web application built with Laravel 11, Inertia.js, and V
 - **PWA**: Service Worker, Web App Manifest, Background Sync
 - **Package Manager**: Composer (PHP) + npm (JavaScript)
 
+## Technology Stack Rationale
+
+This project uses a specific set of technologies chosen for their synergy and high developer productivity. This combination is sometimes referred to as the "TALL" stack, but adapted with Vite and Inertia.js.
+
+*   **Backend: Laravel (PHP)** - A powerful and popular PHP framework that provides structure and a rich set of features like routing, database management (Eloquent ORM), and authentication.
+*   **Frontend: Inertia.js + Vue.js** - Inertia acts as a bridge, allowing the creation of a modern, single-page application (SPA) using Vue.js, but without the complexity of building a separate API.
+*   **CSS: Tailwind CSS** - A utility-first CSS framework for rapidly building custom user interfaces.
+*   **Build Tool: Vite** - A modern, extremely fast build tool for frontend assets (JavaScript and CSS).
+*   **Database: MySQL** - A robust, open-source relational database used for both development and production.
+
+### Pros of This Stack
+
+1.  **Monolithic Simplicity, SPA Feel:** This is the biggest advantage. Inertia.js allows the application to feel like a fast, modern SPA, but the code is written like a traditional, server-rendered application. This eliminates the need to build and maintain a separate API, significantly reducing complexity.
+2.  **Rapid Development:** Laravel provides robust backend features out-of-the-box. Vite offers near-instantaneous feedback during development with Hot Module Replacement (HMR). Tailwind CSS allows for quick styling without writing custom CSS files. This combination makes for a very efficient workflow.
+3.  **Shared Context and Data:** Since the frontend and backend are not separate applications, it's easy to pass data from Laravel directly to Vue components as "props," simplifying state management.
+4.  **Strong Ecosystem:** Laravel has a massive and mature ecosystem of official and community-created packages, along with excellent documentation and community support.
+
+### Cons of This Stack
+
+1.  **Tightly Coupled:** The frontend and backend are closely linked. If the need arises to support other clients (e.g., a native mobile app), building a separate, dedicated API would be necessary. This stack is optimized for a web-based frontend that is part of the same project.
+2.  **Database Considerations:** While SQLite is excellent for development, a more robust database like MySQL or PostgreSQL is required for high-concurrency, write-heavy production applications.
+3.  **Learning Curve:** A developer needs to be comfortable with multiple technologies at once: PHP/Laravel, Vue.js, and the "glue" that is Inertia.js.
+4.  **Opinionated Workflow:** Inertia.js has a specific way of doing things. Teams that prefer the strict separation of a backend API and a frontend client might find it too restrictive.
+
 ## 📋 Prerequisites
 
 Before running this application, ensure you have the following installed:
