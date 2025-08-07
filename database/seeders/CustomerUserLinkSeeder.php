@@ -22,7 +22,8 @@ class CustomerUserLinkSeeder extends Seeder
         foreach ($customerUsers as $user) {
             Customer::create([
                 'user_id' => $user->id,
-                'name' => $user->name,
+                'company_name' => $user->name, // Use company_name instead of name
+                'contact_person' => $user->name,
                 'email' => $user->email,
                 'status' => 'active',
             ]);
