@@ -14,48 +14,31 @@ class UserRoleSeeder extends Seeder
      */
     public function run(): void
     {
-        // Create admin user if doesn't exist
-        $adminUser = User::where('email', 'admin@admin.com')->first();
-        if (!$adminUser) {
-            User::create([
+        // Ensure admin user exists and is in a known good state
+        $admin = User::updateOrCreate(
+            ['email' => 'admin@admin.com'],
+            [
                 'name' => 'System Administrator',
-                'email' => 'admin@admin.com',
                 'password' => Hash::make('password'),
-                'role' => 'admin',
+                'role' => User::ROLE_ADMIN,
                 'is_active' => true,
-                'email_verified_at' => now(),
-            ]);
+                // email_verified_at may be ignored by mass-assignment, set below via forceFill
+            ]
+        );
+
+        // Guarantee verified email timestamp
+        if (! $admin->email_verified_at) {
+            $admin->forceFill(['email_verified_at' => now()])->save();
         }
 
-        // Create staff user if doesn't exist
-        $staffUser = User::where('email', 'staff@example.com')->first();
-        if (!$staffUser) {
-            User::create([
-                'name' => 'Staff Member',
-                'email' => 'staff@example.com',
-                'password' => Hash::make('password'),
-                'role' => 'staff',
-                'is_active' => true,
-                'email_verified_at' => now(),
-            ]);
-        }
+        // Demote any other admins to staff to enforce single-admin policy
+        User::where('role', User::ROLE_ADMIN)
+            ->where('id', '!=', $admin->id)
+            ->update(['role' => User::ROLE_STAFF]);
 
-        // Create customer user if doesn't exist
-        $customerUser = User::where('email', 'customer@example.com')->first();
-        if (!$customerUser) {
-            User::create([
-                'name' => 'Test Customer',
-                'email' => 'customer@example.com',
-                'password' => Hash::make('password'),
-                'role' => 'customer',
-                'is_active' => true,
-                'email_verified_at' => now(),
-            ]);
-        }
-
-        // Update existing users without roles to be customers
+        // Update existing users without roles to be customers (if any exist)
         User::whereNull('role')->update([
-            'role' => 'customer',
+            'role' => User::ROLE_CUSTOMER,
             'is_active' => true,
         ]);
     }

@@ -24,17 +24,17 @@ class AuthServiceProvider extends ServiceProvider
     {
         $this->registerPolicies();
 
-        // Define gate for user management
+        // Define gate for user management - only admin can manage users
         Gate::define('manage-users', function (User $user) {
             return $user->isAdmin();
         });
 
-        // Define gate for staff level access
-        Gate::define('staff-access', function (User $user) {
-            return $user->isAdmin() || $user->isStaff();
+        // Define gate for admin level access
+        Gate::define('admin-access', function (User $user) {
+            return $user->isAdmin();
         });
 
-        // Define gate for customer access
+        // Define gate for customer access (admin can also access customer features)
         Gate::define('customer-access', function (User $user) {
             return $user->isAdmin() || $user->isCustomer();
         });

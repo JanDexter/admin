@@ -12,13 +12,14 @@ This project is a Customer Management Dashboard built with the TALL stack (Tailw
 
 ## ✨ Features
 
-*   **User Roles:** Admin, Staff, and Customer roles with distinct permissions.
+*   **User Roles:** Admin role with ability to create and manage other users.
 *   **Customer Management:** CRUD operations for customer records.
 *   **Task Management:** Assign and track tasks related to customers.
 *   **Service Management:** Define and manage services offered.
-*   **User Management:** Admin interface to manage users.
+*   **User Management:** Admin-only interface to manage users.
 *   **Responsive UI:** Built with Tailwind CSS for a mobile-first experience.
 *   **PWA Ready:** Can be installed as a Progressive Web App.
+*   **Secure Access:** Public registration disabled - only admin can create accounts.
 
 ## 🛠️ Tech Stack
 
@@ -125,13 +126,13 @@ npm run dev
 
 ### 🔑 Default Login Credentials
 
-After running the seeder, you can use these test accounts:
+After running the seeder, you can use this admin account:
 
 | Role | Email | Password | Description |
 |------|-------|----------|-------------|
 | **Admin** | `admin@admin.com` | `password` | Full system access |
-| **Staff** | `staff@example.com` | `password` | Staff-level access |
-| **Customer** | `customer@example.com` | `password` | Customer-level access |
+
+**Note:** Public registration is disabled. Only the admin can create new user accounts through the User Management dashboard.
 
 #### Production Deployment
 
@@ -220,12 +221,10 @@ npm run build
 | GET | `/login` | Show login form |
 | POST | `/login` | Process login |
 | POST | `/logout` | Logout user |
-| GET | `/register` | Show registration form |
-| POST | `/register` | Process registration |
 | GET | `/forgot-password` | Show forgot password form |
 | POST | `/forgot-password` | Send reset link |
 
-> **Note:** Customer deletion has been removed for data integrity and audit purposes.
+> **Note:** Public registration has been disabled for security. Only administrators can create new user accounts via the User Management dashboard.
 
 ## 🏗 Models and Architecture
 

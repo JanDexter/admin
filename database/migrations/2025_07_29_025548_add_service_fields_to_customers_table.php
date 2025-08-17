@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('customers', function (Blueprint $table) {
-            $table->string('service_type')->nullable()->after('company');
+            $table->string('service_type')->nullable()->after('notes');
             $table->decimal('service_price', 8, 2)->nullable()->after('service_type');
             $table->timestamp('service_start_time')->nullable()->after('service_price');
             $table->timestamp('service_end_time')->nullable()->after('service_start_time');

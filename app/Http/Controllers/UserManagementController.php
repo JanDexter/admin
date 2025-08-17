@@ -69,6 +69,13 @@ class UserManagementController extends Controller
             'is_active' => 'boolean',
         ]);
 
+        // Enforce single admin policy - block creating a second admin
+        if ($validated['role'] === User::ROLE_ADMIN && User::where('role', User::ROLE_ADMIN)->exists()) {
+            return back()
+                ->withErrors(['role' => 'Only one admin account is allowed. Demote the existing admin before assigning admin to another user.'])
+                ->withInput();
+        }
+
         $validated['password'] = bcrypt($validated['password']);
         $validated['is_active'] = $validated['is_active'] ?? true;
 
@@ -109,6 +116,22 @@ class UserManagementController extends Controller
             'is_active' => 'boolean',
         ]);
 
+        // Prevent demoting or deactivating the sole admin
+        $isChangingFromAdmin = $user->isAdmin() && $validated['role'] !== User::ROLE_ADMIN;
+        $isDeactivatingAdmin = $user->isAdmin() && array_key_exists('is_active', $validated) && ! $validated['is_active'];
+        if ($isChangingFromAdmin || $isDeactivatingAdmin) {
+            return back()
+                ->withErrors(['role' => 'The single admin account cannot be demoted or deactivated.'])
+                ->withInput();
+        }
+
+        // Prevent promoting another user to admin if an admin already exists (and it's not this user)
+        if ($validated['role'] === User::ROLE_ADMIN && User::where('role', User::ROLE_ADMIN)->where('id', '!=', $user->id)->exists()) {
+            return back()
+                ->withErrors(['role' => 'Only one admin account is allowed. Demote the existing admin before promoting another user.'])
+                ->withInput();
+        }
+
         // Only update password if provided
         if ($request->filled('password')) {
             $request->validate([
@@ -127,7 +150,12 @@ class UserManagementController extends Controller
      */
     public function toggleStatus(User $user)
     {
-        $user->update(['is_active' => !$user->is_active]);
+        // Prevent deactivating the sole admin
+        if ($user->isAdmin() && $user->is_active) {
+            return redirect()->back()->withErrors(['status' => 'The single admin account cannot be deactivated.']);
+        }
+
+        $user->update(['is_active' => ! $user->is_active]);
 
         $status = $user->is_active ? 'activated' : 'deactivated';
         return redirect()->back()->with('success', "User {$status} successfully.");

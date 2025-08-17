@@ -13,13 +13,16 @@ return new class extends Migration
     {
         Schema::create('customers', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
+            $table->string('company_name');
+            $table->string('contact_person');
             $table->string('email')->unique();
             $table->string('phone')->nullable();
-            $table->string('company')->nullable();
             $table->text('address')->nullable();
+            $table->string('website')->nullable();
             $table->enum('status', ['active', 'inactive'])->default('active');
+            $table->text('notes')->nullable();
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 

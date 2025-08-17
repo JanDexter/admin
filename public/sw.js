@@ -27,6 +27,20 @@ self.addEventListener('install', event => {
 
 // Fetch event - serve from cache when offline
 self.addEventListener('fetch', event => {
+  // Only handle same-origin HTTP/HTTPS GET requests to avoid caching extension or other schemes
+  let requestUrl;
+  try {
+    requestUrl = new URL(event.request.url);
+  } catch (e) {
+    // If URL parsing fails, let the request go to network
+    return;
+  }
+
+  if (event.request.method !== 'GET' || (requestUrl.protocol !== 'http:' && requestUrl.protocol !== 'https:') || requestUrl.origin !== self.location.origin) {
+    // Not a safe request for this SW to handle; let it proceed to network
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then(response => {
@@ -34,19 +48,27 @@ self.addEventListener('fetch', event => {
         if (response) {
           return response;
         }
-        
+
         return fetch(event.request).then(response => {
           // Check if we received a valid response
-          if (!response || response.status !== 200 || response.type !== 'basic') {
+          if (!response || response.status !== 200 || (response.type !== 'basic' && response.type !== 'cors')) {
             return response;
           }
 
           // Clone the response
           const responseToCache = response.clone();
 
+          // Only cache same-origin responses and guard against failures
           caches.open(CACHE_NAME)
             .then(cache => {
-              cache.put(event.request, responseToCache);
+              try {
+                cache.put(event.request, responseToCache);
+              } catch (err) {
+                console.log('Cache put failed for', event.request.url, err);
+              }
+            })
+            .catch(err => {
+              console.log('Opening cache failed:', err);
             });
 
           return response;

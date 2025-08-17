@@ -13,7 +13,7 @@ use Inertia\Inertia;
 Route::get('/', function () {
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),
-        'canRegister' => Route::has('register'),
+        'canRegister' => false, // Registration disabled - only admin can create accounts
         'laravelVersion' => Application::VERSION,
         'phpVersion' => PHP_VERSION,
     ]);
@@ -30,6 +30,15 @@ Route::get('/sw.js', function () {
     return response()->file(public_path('sw.js'), [
         'Content-Type' => 'application/javascript'
     ]);
+});
+
+Route::get('/health', function () {
+    return response()->json(['status' => 'ok']);
+});
+
+// Explicitly catch any attempt to access /register and redirect to login
+Route::any('/register', function () {
+    return redirect()->route('login')->with('status', 'Registration is disabled. Please ask the admin to create your account.');
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
