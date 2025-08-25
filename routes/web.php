@@ -6,16 +6,15 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\UserManagementController;
+use App\Http\Controllers\SpaceManagementController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get('/', function () {
-    return Inertia::render('Welcome', [
+    return Inertia::render('Landing', [
         'canLogin' => Route::has('login'),
-        'canRegister' => false, // Registration disabled - only admin can create accounts
-        'laravelVersion' => Application::VERSION,
-        'phpVersion' => PHP_VERSION,
+        'canRegister' => false,
     ]);
 });
 
@@ -41,7 +40,8 @@ Route::any('/register', function () {
     return redirect()->route('login')->with('status', 'Registration is disabled. Please ask the admin to create your account.');
 });
 
-Route::middleware(['auth', 'verified'])->group(function () {
+// Comment out email verification middleware temporarily
+Route::middleware(['auth'])->group(function () { // Removed 'verified' middleware
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     
     // Customer management routes 
@@ -70,6 +70,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/user-management/{user}', [UserManagementController::class, 'update'])->name('user-management.update');
         Route::patch('/user-management/{user}', [UserManagementController::class, 'update'])->name('user-management.update');
         Route::patch('/user-management/{user}/toggle-status', [UserManagementController::class, 'toggleStatus'])->name('user-management.toggle-status');
+    });
+    
+    // Space management routes (Admin only)
+    Route::middleware('can:admin-access')->group(function () {
+        Route::get('/space-management', [SpaceManagementController::class, 'index'])->name('space-management.index');
+        Route::patch('/space-management/space-types/{spaceType}/pricing', [SpaceManagementController::class, 'updatePricing'])->name('space-management.update-pricing');
+        Route::patch('/space-management/spaces/{space}/assign', [SpaceManagementController::class, 'assignSpace'])->name('space-management.assign-space');
+        Route::patch('/space-management/spaces/{space}/release', [SpaceManagementController::class, 'releaseSpace'])->name('space-management.release-space');
     });
     
     // Profile routes

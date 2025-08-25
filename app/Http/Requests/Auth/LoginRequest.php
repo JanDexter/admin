@@ -62,6 +62,16 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        // Prevent customers from logging into the admin dashboard
+        $role = strtolower($user->role ?? '');
+        if ($role === 'customer') {
+            RateLimiter::hit($this->throttleKey());
+
+            throw ValidationException::withMessages([
+                'email' => 'You do not have access to the admin dashboard. Please use the customer portal if applicable.',
+            ]);
+        }
+
         if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
 

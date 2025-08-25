@@ -7,6 +7,7 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ref } from 'vue';
+import logo from '@/../img/logo.png';
 
 defineProps({
     canResetPassword: {
@@ -35,7 +36,9 @@ const submit = () => {
 <template>
     <GuestLayout>
         <Head title="Log in" />
-
+        <div class="flex flex-col items-center mb-6">
+            <img :src="logo" alt="CO-Z Co-Workspace & Study Hub" class="h-16 w-auto mb-2 select-none" draggable="false" />
+        </div>
         <div v-if="status" class="mb-4 text-sm font-medium text-green-600">
             {{ status }}
         </div>

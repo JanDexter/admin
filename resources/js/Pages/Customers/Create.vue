@@ -1,7 +1,11 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed, watch } from 'vue';
+import { computed, watch, ref } from 'vue';
+
+const props = defineProps({
+    spaceTypes: Array,
+});
 
 const serviceTypes = {
     'CONFERENCE ROOM': 350,
@@ -11,23 +15,44 @@ const serviceTypes = {
     'DRAFTING TABLE': 50,
 };
 
+const selectedSpaceType = ref(null);
+const availableSpaces = ref([]);
+
 const form = useForm({
-    name: '',
+    company_name: '',
+    contact_person: '',
     email: '',
     phone: '',
-    company: '',
     address: '',
+    website: '',
     status: 'active',
     service_type: '',
+    space_type_id: '',
     service_price: 0,
     service_start_time: '',
     service_end_time: '',
     amount_paid: 0,
+    notes: '',
 });
 
-// Watch for service type changes to auto-update price
+// Watch for space type changes to update available spaces and price
+watch(() => form.space_type_id, (newSpaceTypeId) => {
+    if (newSpaceTypeId) {
+        selectedSpaceType.value = props.spaceTypes.find(st => st.id == newSpaceTypeId);
+        availableSpaces.value = selectedSpaceType.value?.spaces || [];
+        form.service_price = selectedSpaceType.value?.default_price || 0;
+        form.service_type = selectedSpaceType.value?.name || '';
+    } else {
+        selectedSpaceType.value = null;
+        availableSpaces.value = [];
+        form.service_price = 0;
+        form.service_type = '';
+    }
+});
+
+// Watch for service type changes to auto-update price (legacy support)
 watch(() => form.service_type, (newServiceType) => {
-    if (newServiceType && serviceTypes[newServiceType]) {
+    if (newServiceType && serviceTypes[newServiceType] && !form.space_type_id) {
         form.service_price = serviceTypes[newServiceType];
         // Auto-set amount paid to service price
         form.amount_paid = serviceTypes[newServiceType];
@@ -155,8 +180,32 @@ const submit = () => {
                                 <h3 class="text-lg font-medium text-gray-900 mb-4">Service Details</h3>
                                 
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <!-- Space Type Selection -->
                                     <div>
-                                        <label for="service_type" class="block text-sm font-medium text-gray-700">Service Type</label>
+                                        <label for="space_type_id" class="block text-sm font-medium text-gray-700">Space Type</label>
+                                        <select
+                                            id="space_type_id"
+                                            v-model="form.space_type_id"
+                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                        >
+                                            <option value="">Select a space type</option>
+                                            <option v-for="spaceType in spaceTypes" :key="spaceType.id" :value="spaceType.id">
+                                                {{ spaceType.name }} - ₱{{ spaceType.default_price }} ({{ spaceType.spaces.length }} available)
+                                            </option>
+                                        </select>
+                                        <div v-if="form.errors.space_type_id" class="mt-2 text-sm text-red-600">
+                                            {{ form.errors.space_type_id }}
+                                        </div>
+                                    </div>
+
+                                    <!-- Specific Space Selection -->
+                                    <div v-if="availableSpaces.length > 0" class="text-sm text-gray-600">
+                                        <p>{{ availableSpaces.length }} spaces available in this category</p>
+                                    </div>
+
+                                    <!-- Legacy Service Type (fallback) -->
+                                    <div v-if="!form.space_type_id">
+                                        <label for="service_type" class="block text-sm font-medium text-gray-700">Service Type (Legacy)</label>
                                         <select
                                             id="service_type"
                                             v-model="form.service_type"

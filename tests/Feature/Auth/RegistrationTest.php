@@ -9,14 +9,16 @@ class RegistrationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_registration_screen_can_be_rendered(): void
+    public function test_registration_screen_is_not_available_to_public(): void
     {
         $response = $this->get('/register');
 
-        $response->assertStatus(200);
+        // Registration is disabled for public users; should redirect to login with message.
+        $response->assertRedirect(route('login'));
+        $response->assertSessionHas('status', 'Registration is disabled. Please ask the admin to create your account.');
     }
 
-    public function test_new_users_can_register(): void
+    public function test_public_cannot_register_new_users(): void
     {
         $response = $this->post('/register', [
             'name' => 'Test User',
@@ -25,7 +27,10 @@ class RegistrationTest extends TestCase
             'password_confirmation' => 'password',
         ]);
 
-        $this->assertAuthenticated();
-        $response->assertRedirect(route('dashboard', absolute: false));
+        // Registration endpoint should redirect to login.
+        $response->assertRedirect(route('login'));
+        $response->assertSessionHas('status', 'Registration is disabled. Please ask the admin to create your account.');
+
+        $this->assertGuest();
     }
 }

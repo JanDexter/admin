@@ -63,7 +63,7 @@ class UserManagementController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
+            'email' => 'required|email|unique:users,email', // Unique email validation enforced
             'password' => 'required|string|min:8|confirmed',
             'role' => ['required', Rule::in(['customer', 'staff', 'admin'])],
             'is_active' => 'boolean',
@@ -78,6 +78,8 @@ class UserManagementController extends Controller
 
         $validated['password'] = bcrypt($validated['password']);
         $validated['is_active'] = $validated['is_active'] ?? true;
+        // Email verification disabled - set email_verified_at to current time
+        $validated['email_verified_at'] = now();
 
         User::create($validated);
 
@@ -111,7 +113,7 @@ class UserManagementController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => ['required', 'email', Rule::unique('users')->ignore($user->id)],
+            'email' => ['required', 'email', Rule::unique('users')->ignore($user->id)], // Unique email validation enforced
             'role' => ['required', Rule::in(['customer', 'staff', 'admin'])],
             'is_active' => 'boolean',
         ]);
@@ -138,6 +140,11 @@ class UserManagementController extends Controller
                 'password' => 'required|string|min:8|confirmed',
             ]);
             $validated['password'] = bcrypt($request->password);
+        }
+
+        // Email verification disabled - ensure email_verified_at is set if changing email
+        if ($request->filled('email') && $request->email !== $user->email) {
+            $validated['email_verified_at'] = now();
         }
 
         $user->update($validated);

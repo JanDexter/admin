@@ -1,11 +1,11 @@
 <script setup>
 import { ref } from 'vue';
-import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import NavLink from '@/Components/NavLink.vue';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink.vue';
 import { Link } from '@inertiajs/vue3';
+import logo from '../../img/logo.png';
 
 const showingNavigationDropdown = ref(false);
 </script>
@@ -13,47 +13,39 @@ const showingNavigationDropdown = ref(false);
 <template>
     <div>
         <div class="min-h-screen bg-gray-100">
-            <nav
-                class="border-b border-gray-100 bg-white"
-            >
+            <nav class="bg-white border-b border-gray-100 w-full min-w-full">
                 <!-- Primary Navigation Menu -->
-                <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                    <div class="flex h-16 justify-between">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div class="flex justify-between h-16">
                         <div class="flex">
                             <!-- Logo -->
-                            <div class="flex shrink-0 items-center">
+                            <div class="shrink-0 flex items-center">
                                 <Link :href="route('dashboard')">
-                                    <ApplicationLogo
-                                        class="block h-9 w-auto fill-current text-gray-800"
-                                    />
+                                    <img :src="logo" alt="CO-Z Co-Workspace & Study Hub" class="block h-9 w-auto" />
                                 </Link>
                             </div>
 
                             <!-- Navigation Links -->
-                            <div
-                                class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex"
-                            >
-                                <NavLink
-                                    :href="route('dashboard')"
-                                    :active="route().current('dashboard')"
-                                >
-                                    Customer Dashboard
+                            <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+                                <NavLink :href="route('dashboard')" :active="route().current('dashboard')">
+                                    Dashboard
                                 </NavLink>
-                                
-                                <!-- User Management (Admin only) -->
-                                <NavLink
-                                    v-if="$page.props.auth.user.role === 'admin'"
-                                    :href="route('user-management.index')"
-                                    :active="route().current('user-management.*')"
-                                >
+                                <NavLink :href="route('user-management.index')" :active="route().current('user-management.*')">
                                     User Management
+                                </NavLink>
+                                <NavLink 
+                                    v-if="$page.props.auth.user.role === 'admin'"
+                                    :href="route('space-management.index')" 
+                                    :active="route().current('space-management.*')"
+                                >
+                                    Space Management
                                 </NavLink>
                             </div>
                         </div>
 
-                        <div class="hidden sm:ms-6 sm:flex sm:items-center">
+                        <div class="hidden sm:flex sm:items-center sm:ms-6">
                             <!-- Settings Dropdown -->
-                            <div class="relative ms-3">
+                            <div class="ms-3 relative">
                                 <Dropdown align="right" width="48">
                                     <template #trigger>
                                         <span class="inline-flex rounded-md">
@@ -153,7 +145,7 @@ const showingNavigationDropdown = ref(false);
                             :href="route('dashboard')"
                             :active="route().current('dashboard')"
                         >
-                            Customer Dashboard
+                            Dashboard
                         </ResponsiveNavLink>
                         
                         <!-- User Management (Admin only) -->
@@ -163,6 +155,15 @@ const showingNavigationDropdown = ref(false);
                             :active="route().current('user-management.*')"
                         >
                             User Management
+                        </ResponsiveNavLink>
+                        
+                        <!-- Space Management (Admin only) -->
+                        <ResponsiveNavLink
+                            v-if="$page.props.auth.user.role === 'admin'"
+                            :href="route('space-management.index')"
+                            :active="route().current('space-management.*')"
+                        >
+                            Space Management
                         </ResponsiveNavLink>
                     </div>
 
@@ -199,7 +200,7 @@ const showingNavigationDropdown = ref(false);
 
             <!-- Page Heading -->
             <header
-                class="bg-white shadow"
+                class="bg-transparent"
                 v-if="$slots.header"
             >
                 <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">

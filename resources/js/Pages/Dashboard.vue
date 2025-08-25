@@ -1,12 +1,13 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { usePWA } from '@/composables/usePWA.js';
 
-defineProps({
+const props = defineProps({
     stats: Object,
     customers: Object,
+    spaceTypes: Array,
 });
 
 const { isOnline, isInstallable, isInstalled, installPWA } = usePWA();
@@ -33,57 +34,163 @@ const formatDate = (dateString) => {
         day: 'numeric' 
     });
 };
+
+const getTotalSpaces = (spaceType) => {
+    return spaceType?.spaces?.length || 0;
+};
+
+const getOccupiedSpaces = (spaceType) => {
+    return spaceType?.spaces?.filter(space => space.status === 'occupied').length || 0;
+};
+
+const getAvailableSpaces = (spaceType) => {
+    return spaceType?.spaces?.filter(space => space.status === 'available').length || 0;
+};
+
+const getOccupancyPercentage = (spaceType) => {
+    const total = getTotalSpaces(spaceType);
+    const occupied = getOccupiedSpaces(spaceType);
+    return total > 0 ? Math.round((occupied / total) * 100) : 0;
+};
+
+const getOccupancyFraction = (spaceType) => {
+    const occupied = getOccupiedSpaces(spaceType);
+    const total = getTotalSpaces(spaceType);
+    return `${occupied}/${total}`;
+};
+
+const getNextAvailableTime = (spaceType) => {
+    if (!spaceType?.spaces) return null;
+    
+    const occupiedSpaces = spaceType.spaces
+        .filter(space => space.status === 'occupied' && space.occupied_until)
+        .sort((a, b) => new Date(a.occupied_until) - new Date(b.occupied_until));
+    
+    if (occupiedSpaces.length === 0) {
+        return null;
+    }
+    
+    const nextFree = new Date(occupiedSpaces[0].occupied_until);
+    const now = new Date();
+    
+    if (nextFree <= now) {
+        return 'Available now';
+    }
+    
+    const diff = nextFree - now;
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+    } else {
+        return `${minutes}m`;
+    }
+};
+
+const getTimeUntilFree = (space) => {
+    if (!space.occupied_until) return null;
+    
+    const until = new Date(space.occupied_until);
+    const now = new Date();
+    
+    if (until <= now) return 'Available now';
+    
+    const diff = until - now;
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+    } else {
+        return `${minutes}m`;
+    }
+};
+
+// Helper functions for overall space statistics
+const getAllSpaces = () => {
+    if (!props.spaceTypes) return [];
+    return props.spaceTypes.flatMap(spaceType => spaceType.spaces || []);
+};
+
+const getAvailableSpacesCount = () => {
+    return getAllSpaces().filter(space => space.status === 'available').length;
+};
+
+const getOccupiedSpacesCount = () => {
+    return getAllSpaces().filter(space => space.status === 'occupied').length;
+};
+
+const getOverallOccupancyPercentage = () => {
+    const total = getAllSpaces().length;
+    const occupied = getOccupiedSpacesCount();
+    return total > 0 ? Math.round((occupied / total) * 100) : 0;
+};
+
+const getSlotAvailabilityColor = (spaceType) => {
+    const total = getTotalSpaces(spaceType);
+    const available = getAvailableSpaces(spaceType);
+    const availabilityPercentage = total > 0 ? (available / total) * 100 : 0;
+    
+    if (availabilityPercentage >= 60) {
+        return 'bg-green-100'; // Many slots available - green
+    } else if (availabilityPercentage >= 20) {
+        return 'bg-yellow-100'; // Some slots available - yellow
+    } else {
+        return 'bg-red-100'; // Few/no slots available - red
+    }
+};
 </script>
 
 <template>
-    <Head title="Customer Management Dashboard" />
+    <Head title="Dashboard" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <div class="flex justify-between items-center">
-                <h2 class="font-semibold text-xl text-gray-800 leading-tight">Customer Management Dashboard</h2>
-                <div class="flex items-center gap-4">
-                    <!-- PWA Status Indicators -->
-                    <div class="flex items-center gap-2 text-sm">
-                        <!-- Online/Offline Status -->
-                        <div class="flex items-center gap-1">
-                            <div :class="isOnline ? 'bg-green-500' : 'bg-red-500'" class="w-2 h-2 rounded-full"></div>
-                            <span class="text-gray-600">{{ isOnline ? 'Online' : 'Offline' }}</span>
-                        </div>
-                        
-                        <!-- PWA Install Button -->
-                        <button
-                            v-if="isInstallable && !isInstalled"
-                            @click="installPWA"
-                            class="bg-indigo-500 hover:bg-indigo-700 text-white text-xs px-2 py-1 rounded"
-                        >
-                            Install App
-                        </button>
-                        
-                        <!-- PWA Installed Indicator -->
-                        <div v-if="isInstalled" class="flex items-center gap-1 text-indigo-600">
-                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
-                            </svg>
-                            <span class="text-xs">App Installed</span>
-                        </div>
-                    </div>
-                    
-                    <Link
-                        :href="route('customers.create')"
-                        class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
-                    >
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                        </svg>
-                        Add Customer
-                    </Link>
-                </div>
-            </div>
-        </template>
-
         <div class="py-12">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center mb-8">
+                    <div class="flex items-center gap-4">
+                        <h2 class="font-semibold text-2xl text-gray-800 leading-tight">Dashboard</h2>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <!-- PWA Status Indicators -->
+                        <div class="flex items-center gap-2 text-sm">
+                            <!-- Online/Offline Status -->
+                            <div class="flex items-center gap-1">
+                                <div :class="isOnline ? 'bg-green-500' : 'bg-red-500'" class="w-2 h-2 rounded-full"></div>
+                                <span class="text-gray-600">{{ isOnline ? 'Online' : 'Offline' }}</span>
+                            </div>
+                            
+                            <!-- PWA Install Button -->
+                            <button
+                                v-if="isInstallable && !isInstalled"
+                                @click="installPWA"
+                                class="bg-indigo-500 hover:bg-indigo-700 text-white text-xs px-2 py-1 rounded"
+                            >
+                                Install App
+                            </button>
+                            
+                            <!-- PWA Installed Indicator -->
+                            <div v-if="isInstalled" class="flex items-center gap-1 text-indigo-600">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
+                                </svg>
+                                <span class="text-xs">App Installed</span>
+                            </div>
+                        </div>
+                        
+                        <Link
+                            :href="route('customers.create')"
+                            class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
+                        >
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                            </svg>
+                            Add Customer
+                        </Link>
+                    </div>
+                </div>
+
                 <!-- Statistics Cards -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                     <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
@@ -141,6 +248,38 @@ const formatDate = (dateString) => {
                                         <dt class="text-sm font-medium text-gray-500 truncate">Inactive Customers</dt>
                                         <dd class="text-lg font-medium text-gray-900">{{ stats.inactive_customers }}</dd>
                                     </dl>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Space Slots by Type (Admin only) -->
+                <div v-if="$page.props.auth.user.role === 'admin' && spaceTypes && spaceTypes.length > 0" class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-8">
+                    <div class="p-6">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-lg font-semibold text-gray-900">Space Slots</h3>
+                            <Link
+                                :href="route('space-management.index')"
+                                class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded text-sm"
+                            >
+                                Manage Slots
+                            </Link>
+                        </div>
+                        
+                        <!-- Space Type Slots Grid -->
+                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                            <div 
+                                v-for="spaceType in spaceTypes" 
+                                :key="spaceType.id"
+                                class="rounded-lg p-4 hover:shadow-sm transition-shadow"
+                                :class="getSlotAvailabilityColor(spaceType)"
+                            >
+                                <div class="text-center">
+                                    <h4 class="text-sm font-medium text-gray-900 mb-2">{{ spaceType.name }}</h4>
+                                    <div class="text-2xl font-bold text-gray-900 mb-1">{{ getOccupancyFraction(spaceType) }}</div>
+                                    <div class="text-sm text-gray-600 mb-2">slots occupied</div>
+                                    <div class="text-sm text-gray-500">₱{{ spaceType.hourly_rate || spaceType.default_price }}/hr</div>
                                 </div>
                             </div>
                         </div>

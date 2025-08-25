@@ -63,23 +63,24 @@ const toggleUserStatus = (user) => {
     <Head title="User Management" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <div class="flex justify-between items-center">
-                <h2 class="font-semibold text-xl text-gray-800 leading-tight">User Management</h2>
-                <Link
-                    :href="route('user-management.create')"
-                    class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
-                >
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                    </svg>
-                    Add User
-                </Link>
-            </div>
-        </template>
-
         <div class="py-12">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center mb-8">
+                    <div class="flex items-center gap-4">
+                        <h2 class="font-semibold text-2xl text-gray-800 leading-tight">User Management</h2>
+                    </div>
+                    <div>
+                        <Link
+                            :href="route('user-management.create')"
+                            class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
+                        >
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                            </svg>
+                            Add User
+                        </Link>
+                    </div>
+                </div>
                 <!-- Statistics Cards -->
                 <div class="grid grid-cols-1 md:grid-cols-6 gap-6 mb-8">
                     <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">

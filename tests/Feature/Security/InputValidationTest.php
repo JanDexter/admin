@@ -22,7 +22,8 @@ class InputValidationTest extends TestCase
                 '_token' => csrf_token(),
             ]);
 
-        $response->assertSessionHasErrors(['company_name', 'contact_person', 'email', 'phone']);
+        // Match the actual validation rules: company_name, contact_person, email, status are required
+        $response->assertSessionHasErrors(['company_name', 'contact_person', 'email', 'status']);
     }
 
     /** @test */

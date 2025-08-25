@@ -25,7 +25,8 @@ class Customer extends Model
         'service_price',
         'service_start_time',
         'service_end_time',
-        'amount_paid'
+        'amount_paid',
+        'space_type_id',
     ];
 
     protected $casts = [
@@ -67,5 +68,15 @@ class Customer extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function assignedSpace()
+    {
+        return $this->hasOne(Space::class, 'current_customer_id');
+    }
+
+    public function spaceType()
+    {
+        return $this->belongsTo(SpaceType::class, 'space_type_id');
     }
 }

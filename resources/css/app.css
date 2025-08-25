@@ -1,3 +1,8 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Alternative approach: extend the background of the navbar container itself */
+.min-h-screen > nav.bg-white {
+    background: linear-gradient(to right, white 0%, white calc(100% + 25px));
+}
