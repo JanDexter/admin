@@ -2,54 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Force scrollbar to always be visible to prevent layout shifts */
+/* Layout adjustments: remove forced scrollbar + nav 100vw hack. */
 html {
-    overflow-y: scroll;
+    /* Allow natural vertical scroll */
+    /* Removed: overflow-y: scroll; */
+    /* Reserve space for scrollbar in supporting browsers to minimize layout shift */
+    scrollbar-gutter: stable;
 }
 
-/* Ensure consistent scrollbar styling across browsers */
-::-webkit-scrollbar {
-    width: 17px;
+body {
+    overflow-x: hidden; /* Prevent accidental horizontal scroll */
+    background-color: #f3f4f6; /* Matches Tailwind gray-100 (bg-gray-100) */
 }
 
-::-webkit-scrollbar-track {
-    background: #f1f1f1;
-}
+/* Optional minimal scrollbar styling */
+::-webkit-scrollbar { width: 12px; }
+::-webkit-scrollbar-track { background: #f1f1f1; }
+::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
 
-::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
-    border-radius: 10px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: #a8a8a8;
-}
-
-/* Ensure navbar extends to full width including behind scrollbar */
-nav.bg-white {
-    position: relative;
-    width: 100vw;
-    left: 50%;
-    right: 50%;
-    margin-left: -50vw;
-    margin-right: -50vw;
-    box-sizing: border-box;
-}
-
-/* Extend navbar background behind scrollbar using pseudo-element */
-nav.bg-white::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: -25px; /* Extend well past scrollbar area */
-    bottom: 0;
-    width: 25px;
-    background: white;
-    pointer-events: none; /* Don't interfere with scrollbar interaction */
-    z-index: -1;
-}
-
-/* Alternative approach: extend the background of the navbar container itself */
-.min-h-screen > nav.bg-white {
-    background: linear-gradient(to right, white 0%, white calc(100% + 25px));
-}
+/* Navbar now uses natural full-width behavior (removed prior hacks). */
+/* Removed previous rules: nav.bg-white width:100vw + pseudo-element & gradient extension */
