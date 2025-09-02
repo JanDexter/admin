@@ -1,7 +1,7 @@
 # Customer Management Dashboard
 
 A modern, full-featured web application built with Laravel 11, Inertia.js, and Vue.js for comprehensive customer relationship management. This application provides a streamlined admin interface focused on customer data management and co-workspace service reservations.
-w
+
 ## Preview
 ![Customer Management Dashboard Preview 1](public/img/Screenshot%202025-08-07%20105409.png)
 ![Customer Management Dashboard Preview 2](public/img/Screenshot%202025-08-07%20105413.png)
@@ -517,3 +517,21 @@ php artisan view:clear
 ## License
 
 This project is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+## Changelog (Recent)
+
+### 2025-08-26
+- Disabled public registration & email verification.
+- Enforced unique email constraint with test coverage.
+- Implemented space & slot management (types, occupancy, pricing, discount logic, assignment & release).
+- Unified Dashboard & Space Management card/grid styling.
+- Removed Task Tracker feature (routes, nav links, controller logic, Vue pages). `Task` model & migration retained temporarily; relationships removed; scheduled for full removal after data audit.
+- Removed tasks_count usage in customer listings and related eager load.
+- Cleaned CSS: removed forced scrollbar and navbar 100vw hacks; adopted natural scroll with `scrollbar-gutter: stable` and hidden horizontal overflow.
+- Improved pricing controls responsiveness in Space Management.
+- Simplified customer assignment flow (assign button per space opens customer modal; no pre-selection step required).
+
+### Pending / Next Steps
+- Decide on permanent removal of `tasks` table & migration; create follow-up migration to drop table & model.
+- Enhance customer assignment modal: search/filter & optional inline create.
+- Further accessibility & ARIA refinements for modals.
