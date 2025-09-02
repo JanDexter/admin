@@ -217,8 +217,8 @@ const getSlotAvailabilityColor = (spaceType) => {
                                 <h3 class="text-xl font-semibold text-gray-900">{{ spaceType.name }}</h3>
                                 
                                 <!-- Pricing Controls - Responsive Layout -->
-                                <div class="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-4">
-                                    <div class="flex items-center gap-2">
+                                <div class="flex flex-col md:flex-row md:flex-wrap items-start md:items-center gap-3 md:gap-4 w-full max-w-3xl">
+                                    <div class="flex items-center gap-2 flex-wrap">
                                         <label class="text-xs text-gray-600 whitespace-nowrap">Rate:</label>
                                         <input 
                                             type="number" 
@@ -226,26 +226,24 @@ const getSlotAvailabilityColor = (spaceType) => {
                                             :value="spaceType.hourly_rate || spaceType.default_price"
                                             @blur="updatePricingFields(spaceType.id, 'hourly_rate', $event.target.value)"
                                             @keyup.enter="updatePricingFields(spaceType.id, 'hourly_rate', $event.target.value)"
-                                            class="w-20 px-2 py-1 border border-gray-300 rounded text-xs"
+                                            class="w-24 px-2 py-1 border border-gray-300 rounded text-xs"
                                             :disabled="updatingPricing === spaceType.id"
                                         />
                                         <span class="text-xs text-gray-600">₱/h</span>
                                     </div>
-                                    
-                                    <div class="flex items-center gap-2">
+                                    <div class="flex items-center gap-2 flex-wrap">
                                         <label class="text-xs text-gray-600 whitespace-nowrap">Discount after:</label>
                                         <input 
                                             type="number" 
                                             :value="spaceType.default_discount_hours"
                                             @blur="updatePricingFields(spaceType.id, 'default_discount_hours', $event.target.value)"
                                             @keyup.enter="updatePricingFields(spaceType.id, 'default_discount_hours', $event.target.value)"
-                                            class="w-16 px-2 py-1 border border-gray-300 rounded text-xs"
+                                            class="w-20 px-2 py-1 border border-gray-300 rounded text-xs"
                                             :disabled="updatingPricing === spaceType.id"
                                         />
                                         <span class="text-xs text-gray-600">h</span>
                                     </div>
-                                    
-                                    <div class="flex items-center gap-2">
+                                    <div class="flex items-center gap-2 flex-wrap">
                                         <label class="text-xs text-gray-600">Discount:</label>
                                         <input 
                                             type="number" 
@@ -253,12 +251,11 @@ const getSlotAvailabilityColor = (spaceType) => {
                                             :value="spaceType.default_discount_percentage"
                                             @blur="updatePricingFields(spaceType.id, 'default_discount_percentage', $event.target.value)"
                                             @keyup.enter="updatePricingFields(spaceType.id, 'default_discount_percentage', $event.target.value)"
-                                            class="w-16 px-2 py-1 border border-gray-300 rounded text-xs"
+                                            class="w-20 px-2 py-1 border border-gray-300 rounded text-xs"
                                             :disabled="updatingPricing === spaceType.id"
                                         />
                                         <span class="text-xs text-gray-600">%</span>
                                     </div>
-                                    
                                     <div class="flex items-center gap-2">
                                         <button
                                             @click="toggleEditPricing(spaceType.id)"
@@ -267,7 +264,6 @@ const getSlotAvailabilityColor = (spaceType) => {
                                         >
                                             {{ editingPricing[spaceType.id] ? 'Save' : 'Edit' }}
                                         </button>
-                                        
                                         <span v-if="updatingPricing === spaceType.id" class="text-xs text-blue-600 whitespace-nowrap">Updating...</span>
                                     </div>
                                 </div>
