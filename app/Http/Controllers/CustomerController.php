@@ -13,7 +13,7 @@ class CustomerController extends Controller
     public function index()
     {
         $customers = Customer::with('user')
-            ->withCount('tasks')
+            // Removed tasks count since Task Tracker deprecated
             ->orderBy('created_at', 'desc')
             ->paginate(15);
 

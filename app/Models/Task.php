@@ -2,6 +2,9 @@
 
 namespace App\Models;
 
+// Deprecated Task model (Task Tracker feature removed). Retained temporarily to avoid migration issues.
+// Safe to remove after confirming no production data reliance.
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 

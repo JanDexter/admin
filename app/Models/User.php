@@ -132,12 +132,9 @@ class User extends Authenticatable // implements MustVerifyEmail // Commented ou
     }
 
     /**
-     * Get tasks assigned to this user
+     * Removed tasks() relationship (Task Tracker deprecated)
      */
-    public function tasks()
-    {
-        return $this->hasMany(Task::class);
-    }
+    // public function tasks() { return $this->hasMany(Task::class); }
 
     /**
      * Get services managed by this user

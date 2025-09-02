@@ -3,7 +3,6 @@
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\CustomerController;
-use App\Http\Controllers\TaskController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\SpaceManagementController;
@@ -52,9 +51,6 @@ Route::middleware(['auth'])->group(function () { // Removed 'verified' middlewar
     Route::get('/customers/{customer}/edit', [CustomerController::class, 'edit'])->name('customers.edit');
     Route::put('/customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
     Route::patch('/customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
-    
-    // Task management routes
-    Route::resource('tasks', TaskController::class);
     
     // Service management routes (Co-workspace reservations)
     Route::resource('services', ServiceController::class);

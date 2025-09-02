@@ -60,10 +60,8 @@ class Customer extends Model
         return $this->amount_paid ? '₱' . number_format($this->amount_paid, 2) : '₱0.00';
     }
 
-    public function tasks(): HasMany
-    {
-        return $this->hasMany(Task::class);
-    }
+    // Removed tasks() relationship (Task Tracker deprecated)
+    // public function tasks(): HasMany { return $this->hasMany(Task::class); }
 
     public function user()
     {
