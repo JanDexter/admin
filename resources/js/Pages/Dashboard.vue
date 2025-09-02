@@ -255,7 +255,7 @@ const getSlotAvailabilityColor = (spaceType) => {
                 </div>
 
                 <!-- Space Slots by Type (Admin only) -->
-                <div v-if="$page.props.auth.user.role === 'admin' && spaceTypes && spaceTypes.length > 0" class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-8">
+                <div v-if="($page.props.auth.user.role === 'admin' || $page.props.auth.can.admin_access) && spaceTypes && spaceTypes.length > 0" class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-8">
                     <div class="p-6">
                         <div class="flex justify-between items-center mb-6">
                             <h3 class="text-lg font-semibold text-gray-900">Space Slots</h3>
