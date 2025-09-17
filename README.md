@@ -8,7 +8,7 @@ A modern, full-featured web application built with Laravel 11, Inertia.js, and V
 
 ## 🚀 About This Project
 
-This project is a Customer Management Dashboard built with the TALL stack (Tailwind CSS, Alpine.js, Laravel, Livewire) and other modern technologies. It provides a comprehensive interface for managing customers, tasks, services, and users.
+This project is a Customer Management Dashboard. It provides a comprehensive interface for managing customers, tasks, services, and users.
 
 ## ✨ Features
 
