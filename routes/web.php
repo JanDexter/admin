@@ -74,6 +74,10 @@ Route::middleware(['auth'])->group(function () { // Removed 'verified' middlewar
         Route::patch('/space-management/space-types/{spaceType}/pricing', [SpaceManagementController::class, 'updatePricing'])->name('space-management.update-pricing');
         Route::patch('/space-management/spaces/{space}/assign', [SpaceManagementController::class, 'assignSpace'])->name('space-management.assign-space');
         Route::patch('/space-management/spaces/{space}/release', [SpaceManagementController::class, 'releaseSpace'])->name('space-management.release-space');
+    Route::post('/space-management/space-types', [SpaceManagementController::class, 'storeSpaceType'])->name('space-management.store-space-type');
+    Route::post('/space-management/space-types/{spaceType}/spaces', [SpaceManagementController::class, 'storeSpace'])->name('space-management.store-space');
+    Route::delete('/space-management/spaces/{space}', [SpaceManagementController::class, 'destroySpace'])->name('space-management.destroy-space');
+    Route::delete('/space-management/space-types/{spaceType}/spaces', [SpaceManagementController::class, 'bulkDestroySpaces'])->name('space-management.bulk-destroy-spaces');
     });
     
     // Profile routes
@@ -83,3 +87,7 @@ Route::middleware(['auth'])->group(function () { // Removed 'verified' middlewar
 });
 
 require __DIR__.'/auth.php';
+
+Route::get('/calendar', [App\Http\Controllers\CalendarController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('calendar');

@@ -23,3 +23,10 @@ body {
 
 /* Navbar now uses natural full-width behavior (removed prior hacks). */
 /* Removed previous rules: nav.bg-white width:100vw + pseudo-element & gradient extension */
+
+@layer utilities {
+    .text-xxs {
+        font-size: 0.65rem;
+        line-height: 0.85rem;
+    }
+}

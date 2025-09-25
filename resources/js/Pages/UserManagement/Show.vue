@@ -4,6 +4,8 @@ import { Head, Link } from '@inertiajs/vue3';
 
 const props = defineProps({
     user: Object,
+    totalSpent: Number,
+    points: Number,
 });
 
 const getRoleColor = (role) => {
@@ -167,6 +169,50 @@ const formatDate = (dateString) => {
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Reservation History -->
+                <div class="mt-8 bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                    <div class="p-6 border-b border-gray-200">
+                        <h3 class="text-lg font-medium text-gray-900">Reservation History</h3>
+                        <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <dt class="text-sm font-medium text-gray-500">Total Spent</dt>
+                                <dd class="mt-1 text-2xl font-semibold text-gray-900">₱{{ totalSpent.toLocaleString() }}</dd>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <dt class="text-sm font-medium text-gray-500">Reward Points</dt>
+                                <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ points }}</dd>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Space</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <tr v-for="reservation in user.reservations" :key="reservation.id">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ reservation.space.name }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ reservation.customer.company_name }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ formatDate(reservation.start_time) }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        {{ new Date(reservation.end_time).getHours() - new Date(reservation.start_time).getHours() }} hours
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">₱{{ reservation.cost }}</td>
+                                </tr>
+                                <tr v-if="!user.reservations.length">
+                                    <td colspan="5" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">No reservations found.</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>

@@ -3,10 +3,10 @@ import { Head, Link } from '@inertiajs/vue3';
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import logo from '@/../img/logo.png';
 
-// Dynamically import slideshow images (add or remove images in resources/img/slideshow)
-const imageModules = import.meta.glob('../../img/slideshow/*.jpg', { eager: true, query: '?url', import: 'default' });
+// Dynamically import slideshow images (support jpg/jpeg/png/webp)
+const imageModules = import.meta.glob('../../img/slideshow/*.{jpg,jpeg,png,webp}', { eager: true, import: 'default' });
 const slides = Object.keys(imageModules)
-  .sort() // ensure stable order
+  .sort()
   .map((k, idx) => ({ id: idx, url: imageModules[k] }));
 
 const current = ref(0);
@@ -14,6 +14,7 @@ const intervalMs = 5000; // 5s per slide
 let timer;
 
 function next() {
+  if (!slides.length) return;
   current.value = (current.value + 1) % slides.length;
 }
 function go(i) { current.value = i; resetTimer(); }
@@ -44,7 +45,7 @@ defineProps({ canLogin: Boolean, canRegister: Boolean });
         </div>
       </div>
       <div class="flex items-center gap-3">
-        <Link v-if="canLogin" :href="route('login')" class="inline-flex items-center gap-2 text-xs font-semibold text-[#2f4686] hover:text-[#3956a3] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3956a3] rounded-sm px-2 py-1">
+        <Link v-if="canLogin" href="/login" class="inline-flex items-center gap-2 text-xs font-semibold text-[#2f4686] hover:text-[#3956a3] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#3956a3] rounded-sm px-2 py-1">
           Login
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
         </Link>
@@ -64,7 +65,7 @@ defineProps({ canLogin: Boolean, canRegister: Boolean });
           </p>
         </div>
         <div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-          <Link :href="route('login')" class="group inline-flex items-center justify-center gap-3 rounded-full px-7 py-3 text-lg font-semibold text-white shadow-lg shadow-[#2f4686]/25 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#3956a3] transition-colors" :style="{ background: accentGradient }">
+          <Link href="/login" class="group inline-flex items-center justify-center gap-3 rounded-full px-7 py-3 text-lg font-semibold text-white shadow-lg shadow-[#2f4686]/25 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#3956a3] transition-colors" :style="{ background: accentGradient }">
             <span>Login to Portal</span>
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-5 w-5 stroke-current" fill="none" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
           </Link>
@@ -109,5 +110,5 @@ defineProps({ canLogin: Boolean, canRegister: Boolean });
 
 <style scoped>
 /* Extra subtle noise/texture (optional) */
-:root {}
+/* intentionally left blank; add styles here if needed */
 </style>

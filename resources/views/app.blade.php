@@ -41,69 +41,26 @@
     <body class="font-sans antialiased">
         @inertia
 
-        <!-- PWA Install Prompt -->
-        <div id="pwa-install-prompt" class="hidden fixed bottom-4 left-4 right-4 bg-blue-600 text-white p-4 rounded-lg shadow-lg z-50">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h3 class="font-semibold">Install Admin Dashboard</h3>
-                    <p class="text-sm opacity-90">Install this app for a better experience</p>
-                </div>
-                <div class="flex gap-2">
-                    <button id="pwa-install-btn" class="bg-white text-blue-600 px-3 py-1 rounded text-sm font-medium">
-                        Install
-                    </button>
-                    <button id="pwa-dismiss-btn" class="text-white opacity-75 hover:opacity-100">
-                        ✕
-                    </button>
-                </div>
-            </div>
-        </div>
+        <!-- PWA Install Prompt - Temporarily Disabled -->
+        <!-- <div id="pwa-install-prompt" class="hidden fixed bottom-4 left-4 right-4 bg-blue-600 text-white p-4 rounded-lg shadow-lg z-50" style="display:none">...</div> -->
 
-        <!-- Service Worker Registration -->
+        <!-- Service Worker Registration - Temporarily Disabled -->
         <script>
-            if ('serviceWorker' in navigator) {
-                window.addEventListener('load', function() {
-                    navigator.serviceWorker.register('/sw.js')
-                        .then(function(registration) {
-                            console.log('ServiceWorker registration successful');
-                        })
-                        .catch(function(err) {
-                            console.log('ServiceWorker registration failed: ', err);
-                        });
-                });
-            }
+            // Temporarily disable service worker to troubleshoot loading issues
+            // if ('serviceWorker' in navigator) {
+            //     window.addEventListener('load', function() {
+            //         navigator.serviceWorker.register('/sw.js')
+            //             .then(function(registration) {
+            //                 console.log('ServiceWorker registration successful');
+            //             })
+            //             .catch(function(err) {
+            //                 console.log('ServiceWorker registration failed: ', err);
+            //             });
+            //     });
+            // }
 
-            // PWA Install Prompt
-            let deferredPrompt;
-            const installPrompt = document.getElementById('pwa-install-prompt');
-            const installBtn = document.getElementById('pwa-install-btn');
-            const dismissBtn = document.getElementById('pwa-dismiss-btn');
-
-            window.addEventListener('beforeinstallprompt', (e) => {
-                e.preventDefault();
-                deferredPrompt = e;
-                installPrompt.classList.remove('hidden');
-            });
-
-            installBtn.addEventListener('click', (e) => {
-                installPrompt.classList.add('hidden');
-                deferredPrompt.prompt();
-                deferredPrompt.userChoice.then((choiceResult) => {
-                    if (choiceResult.outcome === 'accepted') {
-                        console.log('User accepted the install prompt');
-                    }
-                    deferredPrompt = null;
-                });
-            });
-
-            dismissBtn.addEventListener('click', (e) => {
-                installPrompt.classList.add('hidden');
-            });
-
-            // Hide install prompt if app is already installed
-            window.addEventListener('appinstalled', (evt) => {
-                installPrompt.classList.add('hidden');
-            });
+            // PWA Install Prompt - Temporarily Disabled
+            console.log('App loaded - checking for JavaScript errors');
         </script>
     </body>
 </html>

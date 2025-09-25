@@ -105,7 +105,16 @@ const formatDate = (dateString) => {
                                             </svg>
                                         </div>
                                     </th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service Availed</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        <div class="flex items-center space-x-1">
+                                            <span>Company</span>
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                                            </svg>
+                                        </div>
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Space Type</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         <div class="flex items-center space-x-1">
                                             <span>Status</span>
@@ -134,8 +143,12 @@ const formatDate = (dateString) => {
                                             <div class="text-sm text-gray-500">{{ customer.phone || customer.email }}</div>
                                         </div>
                                     </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ customer.company_name }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {{ customer.company || 'General Service' }}
+                                        <div>{{ customer.email }}</div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        {{ customer.space_type ? customer.space_type.name : 'N/A' }}
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <span :class="`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(customer.status)}`">

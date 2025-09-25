@@ -7,12 +7,29 @@ use App\Models\SpaceType;
 use App\Models\Space;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\Auth;
 
 class CustomerController extends Controller
 {
+    private function normalizePhone(?string $raw): ?string
+    {
+        if (!$raw) return null;
+        $digits = preg_replace('/\D+/', '', $raw);
+        if ($digits === null || $digits === '') return null;
+        // Convert +63xxxxxxxxxx or 63xxxxxxxxxx to 0xxxxxxxxxx
+        if (preg_match('/^63(9\d{9})$/', $digits, $m)) {
+            return '0' . $m[1];
+        }
+        // Convert 9xxxxxxxxx to 09xxxxxxxxx
+        if (preg_match('/^9\d{9}$/', $digits)) {
+            return '0' . $digits;
+        }
+        // Keep as-is (likely already starts with 0)
+        return $digits;
+    }
     public function index()
     {
-        $customers = Customer::with('user')
+        $customers = Customer::with(['user', 'spaceType'])
             // Removed tasks count since Task Tracker deprecated
             ->orderBy('created_at', 'desc')
             ->paginate(15);
@@ -35,41 +52,43 @@ class CustomerController extends Controller
 
     public function store(Request $request)
     {
+        // Normalize phone to a consistent 09XXXXXXXXX format when possible
+        if ($request->has('phone')) {
+            $request->merge(['phone' => $this->normalizePhone($request->input('phone'))]);
+        }
         $validated = $request->validate([
-            'company_name' => 'required|string|max:255',
-            'contact_person' => 'required|string|max:255',
-            'email' => 'required|email|unique:customers,email',
-            'phone' => 'nullable|string|max:20',
+            'name' => 'required|string|max:255',
+            'company_name' => 'nullable|string|max:255',
+            'email' => 'required|email|max:255|unique:customers,email',
+            'phone' => ['nullable','regex:/^09\d{9}$/'],
             'address' => 'nullable|string',
             'website' => 'nullable|string|max:255',
             'status' => 'required|in:active,inactive',
             'notes' => 'nullable|string',
-            'service_type' => 'nullable|string|in:CONFERENCE ROOM,SHARED SPACE,EXCLUSIVE SPACE,PRIVATE SPACE,DRAFTING TABLE',
-            'service_price' => 'nullable|numeric|min:0',
-            'service_start_time' => 'nullable|date',
-            'service_end_time' => 'nullable|date|after:service_start_time',
             'amount_paid' => 'nullable|numeric|min:0',
             'space_type_id' => 'nullable|exists:space_types,id',
+        ], [
+            'phone.regex' => 'Phone must start with 09 and be 11 digits.',
         ]);
+
+    $validated['user_id'] = Auth::id();
+        $validated['status'] = 'active';
 
         $validated['company_name'] = strip_tags($validated['company_name'] ?? '');
         $validated['contact_person'] = strip_tags($validated['contact_person'] ?? '');
         $validated['address'] = isset($validated['address']) ? strip_tags($validated['address']) : null;
         $validated['notes'] = isset($validated['notes']) ? strip_tags($validated['notes']) : null;
 
-        // Set service price based on space type if selected
-        if (!empty($validated['space_type_id'])) {
-            $spaceType = SpaceType::find($validated['space_type_id']);
-            if ($spaceType) {
-                $validated['service_price'] = $spaceType->default_price;
-                $validated['service_type'] = $spaceType->name;
-            }
-        }
-
         $customer = Customer::create($validated);
 
+        if ($request->boolean('inline')) {
+            return back()->with('success', 'Customer created successfully.')
+                         ->with('customer', $customer);
+        }
+
         return redirect()->route('dashboard')
-            ->with('success', 'Customer created successfully.');
+            ->with('success', 'Customer created successfully.')
+            ->with('customer', $customer);
     }
 
     public function show(Customer $customer)
@@ -78,7 +97,7 @@ class CustomerController extends Controller
             $query->with('user')->orderBy('created_at', 'desc');
         }]);
 
-        $user = auth()->user();
+    $user = Auth::user();
         if (! $user->isAdmin() && $customer->user_id !== $user->id) {
             abort(403);
         }
@@ -97,20 +116,21 @@ class CustomerController extends Controller
 
     public function update(Request $request, Customer $customer)
     {
+        if ($request->has('phone')) {
+            $request->merge(['phone' => $this->normalizePhone($request->input('phone'))]);
+        }
         $validated = $request->validate([
-            'company_name' => 'required|string|max:255',
-            'contact_person' => 'required|string|max:255',
-            'email' => 'required|email|unique:customers,email,' . $customer->id,
-            'phone' => 'nullable|string|max:20',
+            'name' => 'required|string|max:255',
+            'company_name' => 'nullable|string|max:255',
+            'email' => 'required|email|max:255|unique:customers,email,' . $customer->id,
+            'phone' => ['nullable','regex:/^09\d{9}$/'],
             'address' => 'nullable|string',
             'website' => 'nullable|string|max:255',
             'status' => 'required|in:active,inactive',
             'notes' => 'nullable|string',
-            'service_type' => 'nullable|string|in:CONFERENCE ROOM,SHARED SPACE,EXCLUSIVE SPACE,PRIVATE SPACE,DRAFTING TABLE',
-            'service_price' => 'nullable|numeric|min:0',
-            'service_start_time' => 'nullable|date',
-            'service_end_time' => 'nullable|date|after:service_start_time',
             'amount_paid' => 'nullable|numeric|min:0',
+        ], [
+            'phone.regex' => 'Phone must start with 09 and be 11 digits.',
         ]);
 
         $validated['company_name'] = strip_tags($validated['company_name'] ?? '');

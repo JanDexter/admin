@@ -91,8 +91,17 @@ class UserManagementController extends Controller
      */
     public function show(User $user)
     {
+        $user->load(['reservations' => function ($query) {
+            $query->with('space', 'customer')->latest()->take(10);
+        }]);
+
+        $totalSpent = $user->reservations()->sum('cost');
+        $points = floor($totalSpent / 10); // Example: 1 point for every $10 spent
+
         return Inertia::render('UserManagement/Show', [
             'user' => $user,
+            'totalSpent' => $totalSpent,
+            'points' => $points,
         ]);
     }
 

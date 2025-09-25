@@ -1,50 +1,37 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { computed, watch } from 'vue';
+import { computed } from 'vue';
 
 const props = defineProps({
     customer: Object,
 });
 
-const serviceTypes = {
-    'CONFERENCE ROOM': 350,
-    'SHARED SPACE': 40,
-    'EXCLUSIVE SPACE': 60,
-    'PRIVATE SPACE': 50,
-    'DRAFTING TABLE': 50,
-};
-
 const form = useForm({
     name: props.customer.name || '',
     email: props.customer.email || '',
     phone: props.customer.phone || '',
-    company: props.customer.company || '',
+    company_name: props.customer.company_name || '',
     address: props.customer.address || '',
     status: props.customer.status || 'active',
-    service_type: props.customer.service_type || '',
-    service_price: props.customer.service_price || 0,
-    service_start_time: props.customer.service_start_time ? props.customer.service_start_time.slice(0, 16) : '',
-    service_end_time: props.customer.service_end_time ? props.customer.service_end_time.slice(0, 16) : '',
     amount_paid: props.customer.amount_paid || 0,
-});
-
-// Watch for service type changes to auto-update price
-watch(() => form.service_type, (newServiceType) => {
-    if (newServiceType && serviceTypes[newServiceType]) {
-        form.service_price = serviceTypes[newServiceType];
-    } else {
-        form.service_price = 0;
-    }
-});
-
-const formattedServicePrice = computed(() => {
-    return form.service_price ? `₱${form.service_price.toLocaleString()}` : '₱0';
 });
 
 const submit = () => {
     form.put(route('customers.update', props.customer.id));
 };
+
+const onPhoneInput = (e) => {
+    let v = e.target.value.replace(/\D/g, '');
+    if (/^63(9\d{9})$/.test(v)) v = '0' + RegExp.$1;
+    if (/^9\d{9}$/.test(v)) v = '0' + v;
+    if (v.length > 11) v = v.slice(0, 11);
+    form.phone = v;
+};
+const phoneError = computed(() => {
+    if (!form.phone) return '';
+    return /^09\d{9}$/.test(form.phone) ? '' : 'Phone must start with 09 and be 11 digits.';
+});
 </script>
 
 <template>
@@ -101,24 +88,29 @@ const submit = () => {
                                 <input
                                     id="phone"
                                     v-model="form.phone"
+                                    @input="onPhoneInput"
+                                    inputmode="numeric"
+                                    pattern="09\\d{9}"
+                                    maxlength="11"
+                                    placeholder="09XXXXXXXXX"
                                     type="tel"
                                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                 />
-                                <div v-if="form.errors.phone" class="mt-2 text-sm text-red-600">
-                                    {{ form.errors.phone }}
+                                <div v-if="form.errors.phone || phoneError" class="mt-2 text-sm text-red-600">
+                                    {{ form.errors.phone || phoneError }}
                                 </div>
                             </div>
 
                             <div>
-                                <label for="company" class="block text-sm font-medium text-gray-700">Company</label>
+                                <label for="company_name" class="block text-sm font-medium text-gray-700">Company Name</label>
                                 <input
-                                    id="company"
-                                    v-model="form.company"
+                                    id="company_name"
+                                    v-model="form.company_name"
                                     type="text"
                                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                 />
-                                <div v-if="form.errors.company" class="mt-2 text-sm text-red-600">
-                                    {{ form.errors.company }}
+                                <div v-if="form.errors.company_name" class="mt-2 text-sm text-red-600">
+                                    {{ form.errors.company_name }}
                                 </div>
                             </div>
 
@@ -151,74 +143,11 @@ const submit = () => {
                                 </div>
                             </div>
 
-                            <!-- Service Selection Section -->
+                            <!-- Amount Paid Section -->
                             <div class="border-t border-gray-200 pt-6">
-                                <h3 class="text-lg font-medium text-gray-900 mb-4">Service Details</h3>
+                                <h3 class="text-lg font-medium text-gray-900 mb-4">Billing Details</h3>
                                 
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div>
-                                        <label for="service_type" class="block text-sm font-medium text-gray-700">Service Type</label>
-                                        <select
-                                            id="service_type"
-                                            v-model="form.service_type"
-                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                        >
-                                            <option value="">Select a service</option>
-                                            <option v-for="(price, service) in serviceTypes" :key="service" :value="service">
-                                                {{ service }} - ₱{{ price }}
-                                            </option>
-                                        </select>
-                                        <div v-if="form.errors.service_type" class="mt-2 text-sm text-red-600">
-                                            {{ form.errors.service_type }}
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <label for="service_price" class="block text-sm font-medium text-gray-700">Service Price</label>
-                                        <div class="mt-1 relative rounded-md shadow-sm">
-                                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                                <span class="text-gray-500 sm:text-sm">₱</span>
-                                            </div>
-                                            <input
-                                                id="service_price"
-                                                v-model="form.service_price"
-                                                type="number"
-                                                step="0.01"
-                                                class="pl-7 mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                                readonly
-                                            />
-                                        </div>
-                                        <div v-if="form.errors.service_price" class="mt-2 text-sm text-red-600">
-                                            {{ form.errors.service_price }}
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <label for="service_start_time" class="block text-sm font-medium text-gray-700">Start Time</label>
-                                        <input
-                                            id="service_start_time"
-                                            v-model="form.service_start_time"
-                                            type="datetime-local"
-                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                        />
-                                        <div v-if="form.errors.service_start_time" class="mt-2 text-sm text-red-600">
-                                            {{ form.errors.service_start_time }}
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <label for="service_end_time" class="block text-sm font-medium text-gray-700">End Time</label>
-                                        <input
-                                            id="service_end_time"
-                                            v-model="form.service_end_time"
-                                            type="datetime-local"
-                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                        />
-                                        <div v-if="form.errors.service_end_time" class="mt-2 text-sm text-red-600">
-                                            {{ form.errors.service_end_time }}
-                                        </div>
-                                    </div>
-
                                     <div class="md:col-span-2">
                                         <label for="amount_paid" class="block text-sm font-medium text-gray-700">Amount Paid</label>
                                         <div class="mt-1 relative rounded-md shadow-sm">
