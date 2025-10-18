@@ -14,9 +14,19 @@ const assigningSpace = ref(null);
 const showCustomerModal = ref(false);
 const selectedSpaceForAssignment = ref(null);
 const showCreateCustomerForm = ref(false);
-const editingPricing = ref({});
-// Holds temporary editable values per spaceTypeId when in edit mode
-const editingValues = ref({});
+// Pricing modal state
+const showPricingModalId = ref(null); // spaceTypeId or null
+const pricingForm = ref({ hourly_rate: '', default_discount_hours: '', default_discount_percentage: '' });
+const pricingErrors = ref({ hourly_rate: '', default_discount_hours: '', default_discount_percentage: '' });
+
+// Local toast notifications
+const toast = ref({ show: false, type: 'success', message: '' });
+let toastTimerId = null;
+const showToast = (message, type = 'success', duration = 3000) => {
+    toast.value = { show: true, type, message };
+    if (toastTimerId) clearTimeout(toastTimerId);
+    toastTimerId = setTimeout(() => { toast.value.show = false; }, duration);
+};
 
 const hasCustomers = computed(() => props.customers && props.customers.length > 0);
 
@@ -86,6 +96,7 @@ onBeforeUnmount(() => {
     if (tickIntervalId) clearInterval(tickIntervalId);
     for (const [, id] of releaseTimers) clearTimeout(id);
     releaseTimers.clear();
+    if (toastTimerId) clearTimeout(toastTimerId);
 });
 
 // Reschedule timers when spaces update
@@ -131,13 +142,10 @@ const resetAssignment = () => {
 
 const updatePricing = (spaceTypeId, newPrice) => {
     updatingPricing.value = spaceTypeId;
-    
     router.patch(route('space-management.update-pricing', spaceTypeId), {
         default_price: newPrice
     }, {
-        onFinish: () => {
-            updatingPricing.value = null;
-        }
+        onFinish: () => { updatingPricing.value = null; }
     });
 };
 
@@ -278,15 +286,87 @@ const getNextAvailableTime = (spaceType) => {
     }
 };
 
-const updatePricingFields = (spaceTypeId, field, value) => {
-    updatingPricing.value = spaceTypeId;
-    
-    router.patch(route('space-management.update-pricing', spaceTypeId), {
-        [field]: value
-    }, {
-        onFinish: () => {
-            updatingPricing.value = null;
+// Open modal populated with current values
+const openPricingModal = (spaceType) => {
+    showPricingModalId.value = spaceType.id;
+    pricingForm.value = {
+        hourly_rate: spaceType.hourly_rate ?? spaceType.default_price ?? '',
+        default_discount_hours: spaceType.default_discount_hours ?? '',
+        default_discount_percentage: spaceType.default_discount_percentage ?? '',
+    };
+    pricingErrors.value = { hourly_rate: '', default_discount_hours: '', default_discount_percentage: '' };
+};
+
+const closePricingModal = () => {
+    showPricingModalId.value = null;
+};
+
+const validatePricing = () => {
+    pricingErrors.value = { hourly_rate: '', default_discount_hours: '', default_discount_percentage: '' };
+    const v = pricingForm.value || {};
+    let ok = true;
+    const rate = v.hourly_rate;
+    const hours = v.default_discount_hours;
+    const percent = v.default_discount_percentage;
+
+    if (rate === '' || isNaN(rate) || Number(rate) < 0) {
+        pricingErrors.value.hourly_rate = 'Rate must be a number greater than or equal to 0.';
+        ok = false;
+    }
+
+    // Discount fields are optional, but when provided must be valid and both should be set
+    const hasHours = hours !== '' && hours !== null && hours !== undefined;
+    const hasPercent = percent !== '' && percent !== null && percent !== undefined;
+
+    if (hasHours) {
+        if (isNaN(hours) || Number(hours) < 1) {
+            pricingErrors.value.default_discount_hours = 'Discount starts after at least 1 hour.';
+            ok = false;
         }
+    }
+    if (hasPercent) {
+        if (isNaN(percent) || Number(percent) < 0 || Number(percent) > 100) {
+            pricingErrors.value.default_discount_percentage = 'Discount percent must be between 0 and 100.';
+            ok = false;
+        }
+    }
+    if (hasHours !== hasPercent) {
+        if (!hasHours) pricingErrors.value.default_discount_hours = 'Provide hours when setting a discount percent.';
+        if (!hasPercent) pricingErrors.value.default_discount_percentage = 'Provide a percent when setting discount hours.';
+        ok = false;
+    }
+
+    return ok;
+};
+
+const savePricingModal = () => {
+    const id = showPricingModalId.value;
+    if (!id) return;
+    if (!validatePricing()) return;
+    const val = pricingForm.value || {};
+    updatingPricing.value = id;
+    const payload = {
+        hourly_rate: Number(val.hourly_rate),
+        default_discount_hours: val.default_discount_hours === '' ? null : Number(val.default_discount_hours),
+        default_discount_percentage: val.default_discount_percentage === '' ? null : Number(val.default_discount_percentage),
+    };
+    router.patch(route('space-management.update-pricing', id), payload, {
+        preserveScroll: true,
+        onError: (errors) => {
+            // Map server-side validation errors (422) to inline errors
+            pricingErrors.value.hourly_rate = errors?.hourly_rate ?? pricingErrors.value.hourly_rate;
+            pricingErrors.value.default_discount_hours = errors?.default_discount_hours ?? pricingErrors.value.default_discount_hours;
+            pricingErrors.value.default_discount_percentage = errors?.default_discount_percentage ?? pricingErrors.value.default_discount_percentage;
+            showToast('Failed to save pricing. Please check the form and try again.', 'error');
+            updatingPricing.value = null;
+        },
+        onSuccess: () => {
+            updatingPricing.value = null;
+            closePricingModal();
+            showToast('Pricing updated successfully.', 'success');
+            // Refresh only the spaceTypes list so new values are reflected
+            router.reload({ only: ['spaceTypes'] });
+        },
     });
 };
 
@@ -310,33 +390,7 @@ const getTimeUntilFree = (space) => {
     }
 };
 
-const startEdit = (spaceType) => {
-    const id = spaceType.id;
-    editingPricing.value[id] = true;
-    editingValues.value[id] = {
-        hourly_rate: spaceType.hourly_rate ?? spaceType.default_price ?? '',
-        default_discount_hours: spaceType.default_discount_hours ?? '',
-        default_discount_percentage: spaceType.default_discount_percentage ?? '',
-    };
-};
-
-const savePricingGroup = (spaceTypeId) => {
-    const val = editingValues.value[spaceTypeId] || {};
-    updatingPricing.value = spaceTypeId;
-    router.patch(route('space-management.update-pricing', spaceTypeId), {
-        hourly_rate: val.hourly_rate,
-        default_discount_hours: val.default_discount_hours,
-        default_discount_percentage: val.default_discount_percentage,
-    }, {
-        preserveState: false,
-        onFinish: () => {
-            updatingPricing.value = null;
-            editingPricing.value[spaceTypeId] = false;
-            // Remove temp cache to avoid stale values on next edit
-            delete editingValues.value[spaceTypeId];
-        }
-    });
-};
+// Removed inline edit state in favor of modal
 
 const getSlotAvailabilityColor = (spaceType) => {
     const total = getTotalSpaces(spaceType);
@@ -430,6 +484,17 @@ const bulkRemove = (spaceType) => {
         data: { count },
         preserveScroll: true,
         onFinish: () => { bulkRemoving.value[spaceType.id] = false; }
+    });
+};
+
+// --- Delete entire space type ---
+const deletingType = ref({}); // keyed by spaceTypeId -> bool
+const deleteSpaceType = (spaceType) => {
+    if (!confirm(`Delete the entire space type "${spaceType.name}"? All its spaces will be removed. This cannot be undone.`)) return;
+    deletingType.value[spaceType.id] = true;
+    router.delete(route('space-management.destroy-space-type', spaceType.id), {
+        preserveScroll: true,
+        onFinish: () => { deletingType.value[spaceType.id] = false; }
     });
 };
 </script>
@@ -537,64 +602,18 @@ const bulkRemove = (spaceType) => {
             <div class="p-6">                            <div class="flex items-center justify-between gap-4 mb-6 flex-nowrap">
                 <h3 class="text-xl font-semibold text-gray-900 whitespace-nowrap truncate flex-1 min-w-0">{{ spaceType.name }}</h3>
                                 
-                                <!-- Pricing Controls - Responsive Layout -->
-                                <div class="ml-auto flex flex-row flex-nowrap items-center gap-4 overflow-x-auto whitespace-nowrap flex-none">
-                                    <div class="flex items-center gap-2 text-gray-500 text-xs flex-none" title="Changes apply only to future reservations. Ongoing ones keep their current rate.">
-                                        <span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-700 font-semibold cursor-help">i</span>
-                                        <span class="hidden md:inline">Changes apply to next reservations</span>
-                                    </div>
-                                    <div class="flex items-center gap-2 flex-nowrap flex-none">
-                                        <label class="text-xs text-gray-600 whitespace-nowrap">Rate:</label>
-                                        <input 
-                                            type="number" 
-                                            step="0.01"
-                                            :value="editingPricing[spaceType.id] ? editingValues[spaceType.id]?.hourly_rate : (spaceType.hourly_rate || spaceType.default_price)"
-                                            @input="e => { if (editingPricing[spaceType.id]) { (editingValues[spaceType.id] ||= {}), editingValues[spaceType.id].hourly_rate = e.target.value } }"
-                                            class="w-24 px-2 py-1 border border-gray-300 rounded text-xs"
-                                            :disabled="!editingPricing[spaceType.id] || updatingPricing === spaceType.id"
-                                        />
-                                        <span class="text-xs text-gray-600">₱/h</span>
-                                        <button
-                                            @click="editingPricing[spaceType.id] ? savePricingGroup(spaceType.id) : startEdit(spaceType)"
-                                            class="ml-2 bg-blue-500 hover:bg-blue-600 text-white text-xs py-1 px-3 rounded whitespace-nowrap"
-                                            :disabled="updatingPricing === spaceType.id"
-                                        >
-                                            {{ editingPricing[spaceType.id] ? 'Save' : 'Edit' }}
-                                        </button>
-                                        <span v-if="updatingPricing === spaceType.id" class="text-xs text-blue-600 whitespace-nowrap">Updating...</span>
-                                    </div>
-                                    <div class="flex items-center gap-2 flex-nowrap flex-none">
-                                        <label class="text-xs text-gray-600 whitespace-nowrap">Discount after:</label>
-                                        <input 
-                                            type="number" 
-                                            :value="editingPricing[spaceType.id] ? editingValues[spaceType.id]?.default_discount_hours : spaceType.default_discount_hours"
-                                            @input="e => { if (editingPricing[spaceType.id]) { (editingValues[spaceType.id] ||= {}), editingValues[spaceType.id].default_discount_hours = e.target.value } }"
-                                            class="w-20 px-2 py-1 border border-gray-300 rounded text-xs"
-                                            :disabled="!editingPricing[spaceType.id] || updatingPricing === spaceType.id"
-                                        />
-                                        <span class="text-xs text-gray-600">h</span>
-                                    </div>
-                                    <div class="flex items-center gap-2 flex-nowrap flex-none">
-                                        <label class="text-xs text-gray-600">Discount:</label>
-                                        <input 
-                                            type="number" 
-                                            step="0.01"
-                                            :value="editingPricing[spaceType.id] ? editingValues[spaceType.id]?.default_discount_percentage : spaceType.default_discount_percentage"
-                                            @input="e => { if (editingPricing[spaceType.id]) { (editingValues[spaceType.id] ||= {}), editingValues[spaceType.id].default_discount_percentage = e.target.value } }"
-                                            class="w-20 px-2 py-1 border border-gray-300 rounded text-xs"
-                                            :disabled="!editingPricing[spaceType.id] || updatingPricing === spaceType.id"
-                                        />
-                                        <span class="text-xs text-gray-600">%</span>
-                                    </div>
-                                    <div class="flex items-center gap-2 flex-none">
-                                        <button @click="toggleAddSpace(spaceType.id)" class="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 whitespace-nowrap">{{ showAddSpace[spaceType.id] ? 'Cancel' : 'Add Space' }}</button>
-                                    </div>
+                                <!-- Actions -->
+                                <div class="ml-auto flex flex-row items-center gap-3 flex-none">
+                                    <button @click="openPricingModal(spaceType)" class="text-xs px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700">Edit Rate & Discount</button>
+                                    <button @click="toggleAddSpace(spaceType.id)" class="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 whitespace-nowrap">{{ showAddSpace[spaceType.id] ? 'Cancel' : 'Add Space' }}</button>
                                     <div class="flex items-center gap-2 flex-none">
                                         <label class="text-xs text-gray-600">Remove</label>
                                         <input type="number" min="1" :max="getAvailableSpaces(spaceType)" class="w-16 px-2 py-1 border border-gray-300 rounded text-xs" v-model.number="bulkRemoveCount[spaceType.id]" placeholder="1" />
                                         <button @click="bulkRemove(spaceType)" :disabled="bulkRemoving[spaceType.id] || !getAvailableSpaces(spaceType)" class="text-xs px-2 py-1 rounded border border-red-300 text-red-700 hover:bg-red-50 whitespace-nowrap">{{ bulkRemoving[spaceType.id] ? 'Removing…' : 'Remove Available' }}</button>
                                     </div>
-                                    
+                                    <button @click="deleteSpaceType(spaceType)" :disabled="deletingType[spaceType.id]" class="text-xs px-3 py-1.5 rounded border border-red-300 text-red-700 hover:bg-red-50 whitespace-nowrap">
+                                        {{ deletingType[spaceType.id] ? 'Deleting…' : 'Delete Type' }}
+                                    </button>
                                 </div>
                             </div>
 
@@ -799,6 +818,74 @@ const bulkRemove = (spaceType) => {
 
                 <!-- Create Customer Form Modal (shared component) -->
                 <CustomerQuickCreateModal :show="showCreateCustomerForm" @close="showCreateCustomerForm = false" @created="onCustomerCreated" />
+
+                <!-- Pricing Modal -->
+                <div v-if="showPricingModalId !== null" class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+                    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" @click="closePricingModal"></div>
+                        <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full">
+                            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                <div class="sm:flex sm:items-start">
+                                    <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Edit Rate & Discount</h3>
+                                        <div class="space-y-3">
+                                            <div>
+                                                <label class="block text-xs font-medium text-gray-700">Rate (₱/h)</label>
+                                                <input 
+                                                    v-model.number="pricingForm.hourly_rate" 
+                                                    type="number" min="0" step="0.01" 
+                                                    class="mt-1 block w-full rounded-md shadow-sm text-sm border"
+                                                    :class="pricingErrors.hourly_rate ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'"
+                                                />
+                                                <p v-if="pricingErrors.hourly_rate" class="mt-1 text-xxs text-red-600">{{ pricingErrors.hourly_rate }}</p>
+                                            </div>
+                                            <div class="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label class="block text-xs font-medium text-gray-700">Disc. After (h)</label>
+                                                    <input 
+                                                        v-model.number="pricingForm.default_discount_hours" 
+                                                        type="number" min="1" 
+                                                        class="mt-1 block w-full rounded-md shadow-sm text-sm border"
+                                                        :class="pricingErrors.default_discount_hours ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'"
+                                                    />
+                                                    <p v-if="pricingErrors.default_discount_hours" class="mt-1 text-xxs text-red-600">{{ pricingErrors.default_discount_hours }}</p>
+                                                </div>
+                                                <div>
+                                                    <label class="block text-xs font-medium text-gray-700">Discount (%)</label>
+                                                    <input 
+                                                        v-model.number="pricingForm.default_discount_percentage" 
+                                                        type="number" min="0" max="100" step="0.01" 
+                                                        class="mt-1 block w-full rounded-md shadow-sm text-sm border"
+                                                        :class="pricingErrors.default_discount_percentage ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'"
+                                                    />
+                                                    <p v-if="pricingErrors.default_discount_percentage" class="mt-1 text-xxs text-red-600">{{ pricingErrors.default_discount_percentage }}</p>
+                                                </div>
+                                            </div>
+                                            <p class="text-xxs text-gray-500">Applies to future reservations. Ongoing assignments retain their current rate.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                                <button @click="savePricingModal" :disabled="updatingPricing === showPricingModalId" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 sm:ml-3 sm:w-auto sm:text-sm">
+                                    {{ updatingPricing === showPricingModalId ? 'Saving…' : 'Save' }}
+                                </button>
+                                <button @click="closePricingModal" type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Toasts -->
+                <div v-if="toast.show" class="fixed top-4 right-4 z-[60]">
+                    <div 
+                        class="px-4 py-3 rounded shadow border text-sm"
+                        :class="toast.type === 'success' ? 'bg-green-50 text-green-800 border-green-200' : 'bg-red-50 text-red-800 border-red-200'"
+                    >
+                        {{ toast.message }}
+                    </div>
+                </div>
             </div>
         </div>
     </AuthenticatedLayout>

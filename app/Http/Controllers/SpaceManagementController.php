@@ -232,4 +232,25 @@ class SpaceManagementController extends Controller
 
         return redirect()->back()->with('success', "Removed {$deleted} available space(s).");
     }
+
+    // Remove an entire space type (only if no occupied spaces remain)
+    public function destroySpaceType(SpaceType $spaceType)
+    {
+        // Prevent deleting when any space is occupied
+        $occupiedCount = $spaceType->spaces()->where('status', 'occupied')->count();
+        if ($occupiedCount > 0) {
+            return redirect()->back()->with('error', 'Cannot delete this space type while there are occupied spaces. Release them first.');
+        }
+
+        // Delete all remaining spaces under this type first
+        $spaces = $spaceType->spaces()->get();
+        foreach ($spaces as $s) {
+            $s->delete();
+        }
+
+        // Finally, delete the space type
+        $spaceType->delete();
+
+        return redirect()->back()->with('success', 'Space type removed successfully.');
+    }
 }
