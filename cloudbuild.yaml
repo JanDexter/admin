@@ -1,0 +1,37 @@
+steps:
+  # Install Composer dependencies
+  - name: 'composer'
+    args: ['install', '--no-dev', '--optimize-autoloader', '--no-interaction']
+  
+  # Install npm dependencies
+  - name: 'node:18'
+    entrypoint: 'npm'
+    args: ['ci', '--production=false']
+  
+  # Build frontend assets
+  - name: 'node:18'
+    entrypoint: 'npm'
+    args: ['run', 'build']
+  
+  # Optimize Laravel
+  - name: 'gcr.io/google-appengine/php:latest'
+    entrypoint: 'php'
+    args: ['artisan', 'config:cache']
+  
+  - name: 'gcr.io/google-appengine/php:latest'
+    entrypoint: 'php'
+    args: ['artisan', 'route:cache']
+  
+  - name: 'gcr.io/google-appengine/php:latest'
+    entrypoint: 'php'
+    args: ['artisan', 'view:cache']
+  
+  # Deploy to App Engine
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args: ['app', 'deploy', 'app.yaml', '--quiet']
+
+timeout: 1200s
+
+options:
+  machineType: 'N1_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
