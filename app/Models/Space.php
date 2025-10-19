@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 
 class Space extends Model
 {
@@ -63,12 +64,45 @@ class Space extends Model
             'occupied_until' => $until,
         ]);
 
+        // Snapshot current effective pricing so future changes won't affect this reservation
+        $effectiveHourly = $this->getEffectiveHourlyRate();
+        $discountHours = $this->discount_hours ?? $this->spaceType->default_discount_hours;
+        $discountPct = $this->discount_percentage ?? $this->spaceType->default_discount_percentage;
+
+        Reservation::create([
+            'user_id' => Auth::id(),
+            'customer_id' => $customerId,
+            'space_id' => $this->id,
+            'start_time' => $from ?? now(),
+            'end_time' => $until,
+            'applied_hourly_rate' => $effectiveHourly,
+            'applied_discount_hours' => $discountHours,
+            'applied_discount_percentage' => $discountPct,
+        ]);
+
         // Update space type available slots
         $this->spaceType->decrement('available_slots');
     }
 
     public function release()
     {
+        $reservation = Reservation::where('space_id', $this->id)->whereNull('end_time')->latest()->first();
+        if ($reservation) {
+            // Calculate hours from start to now; keep integer hours as before
+            $hours = now()->diffInHours($reservation->start_time);
+            // Prefer custom hourly rate when provided; otherwise use applied snapshot values
+            $hourly = $reservation->custom_hourly_rate ?? $reservation->applied_hourly_rate;
+            $discountHours = $reservation->applied_discount_hours;
+            $discountPct = $reservation->applied_discount_percentage;
+
+            $cost = $this->calculateCost($hours, $hourly, $discountHours, $discountPct);
+
+            $reservation->update([
+                'end_time' => now(),
+                'cost' => $cost,
+            ]);
+        }
+
         $this->update([
             'status' => 'available',
             'current_customer_id' => null,
@@ -82,24 +116,26 @@ class Space extends Model
 
     public function getEffectiveHourlyRate()
     {
-        return $this->hourly_rate ?? $this->spaceType->hourly_rate ?? $this->spaceType->default_price;
+        return $this->hourly_rate ?: ($this->spaceType->hourly_rate ?? $this->spaceType->default_price);
     }
 
-    public function calculateCost($hours)
+    public function calculateCost($hours, $customHourlyRate = null, $overrideDiscountHours = null, $overrideDiscountPct = null)
     {
-        $hourlyRate = $this->getEffectiveHourlyRate();
-        $discountHours = $this->discount_hours ?? $this->spaceType->default_discount_hours;
-        $discountPercentage = $this->discount_percentage ?? $this->spaceType->default_discount_percentage;
+        $hourlyRate = $customHourlyRate ?? $this->getEffectiveHourlyRate();
+        $discountHours = $overrideDiscountHours ?? ($this->discount_hours ?? $this->spaceType->default_discount_hours);
+        $discountPercentage = $overrideDiscountPct ?? ($this->discount_percentage ?? $this->spaceType->default_discount_percentage);
 
-        $totalCost = $hourlyRate * $hours;
+        // Round hours up to nearest 0.5 to avoid undercharging and give clearer estimates
+        $hoursRounded = ceil($hours * 2) / 2;
 
-        // Apply discount if applicable
-        if ($discountHours && $discountPercentage && $hours >= $discountHours) {
+        $totalCost = $hourlyRate * $hoursRounded;
+
+        if ($discountHours && $discountPercentage && $hoursRounded >= $discountHours) {
             $discountAmount = ($totalCost * $discountPercentage) / 100;
             $totalCost -= $discountAmount;
         }
 
-        return $totalCost;
+        return round($totalCost, 2);
     }
 
     public function getTimeUntilFree()

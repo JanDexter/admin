@@ -12,24 +12,59 @@ This project is a Customer Management Dashboard. It provides a comprehensive int
 
 ## ✨ Features
 
+### Core Management
 *   **User Roles:** Admin role with ability to create and manage other users.
-*   **Customer Management:** CRUD operations for customer records.
+*   **Customer Management:** CRUD operations for customer records with standardized company name handling.
 *   **Task Management:** Assign and track tasks related to customers.
-*   **Service Management:** Define and manage services offered.
-*   **User Management:** Admin-only interface to manage users.
+*   **Service Management:** Define and manage services offered with automatic pricing.
+*   **User Management:** Admin-only interface to manage users with enhanced filtering.
+
+### Space & Reservation Management
+*   **Space Management:** Real-time space allocation with visual status indicators.
+*   **Reservation System:** Complete reservation tracking with history and cost calculation.
+*   **Calendar View:** FullCalendar integration showing all space occupancy with detailed hover tooltips.
+*   **Space Overview:** Color-coded grid view of all spaces with availability status.
+*   **Dynamic Pricing:** Configurable hourly rates and discount systems per space type.
+*   **Points System:** Customer reward points based on spending history.
+
+### User Experience
+*   **Real-time Updates:** Countdown timers on occupied spaces showing time until release.
+*   **Smart State Management:** Enhanced tab switching without data loss.
 *   **Responsive UI:** Built with Tailwind CSS for a mobile-first experience.
 *   **PWA Ready:** Can be installed as a Progressive Web App.
 *   **Secure Access:** Public registration disabled - only admin can create accounts.
+
+## 🆕 Recent Updates (September 2025)
+
+### Space Management & Reservations
+- **Complete Reservation System**: Added full reservation tracking with automatic cost calculation
+- **Calendar Integration**: Implemented FullCalendar with detailed hover tooltips and enhanced view options  
+- **Space Overview Dashboard**: Color-coded grid showing real-time space availability
+- **Dynamic Countdown Timers**: Visual countdown on occupied spaces showing time until release
+- **Points & Rewards System**: Customer loyalty points based on spending history
+
+### Data Consistency & Bug Fixes  
+- **Standardized Data Fields**: Fixed `company` vs `company_name` inconsistencies across the system
+- **Enhanced State Management**: Resolved user disappearing bug during tab switching
+- **Service Auto-Assignment**: Automatic service price calculation during customer creation
+- **Improved User Experience**: Removed auto-updates on focus loss, requiring explicit save actions
+
+### UI/UX Improvements
+- **Responsive Calendar Views**: Wider dropdown buttons and improved mobile responsiveness
+- **Enhanced Tooltips**: Rich hover details showing space, customer, timing, and cost information
+- **Modern Dashboard Design**: Consistent styling across all management interfaces
+- **Real-time Updates**: Page refreshes ensure calendar and dashboard data accuracy
 
 ## 🛠️ Tech Stack
 
 The application is built using the following technologies:
 
-*   **Backend:** Laravel (PHP)
-*   **Frontend:** Vue.js with Inertia.js
+*   **Backend:** Laravel 11 (PHP 8.2+)
+*   **Frontend:** Vue.js 3 with Inertia.js
+*   **Calendar:** FullCalendar with Vue3 integration
 *   **Styling:** Tailwind CSS
-*   **Database:** MySQL
-*   **Development:** Vite, Docker
+*   **Database:** MySQL 8.0+
+*   **Development:** Vite, Node.js 18+
 
 ### Why this stack?
 
@@ -124,6 +159,142 @@ npm run dev
 
 **Access the application:** `http://localhost:8000`
 
+## 🔧 Development
+
+### Code Standards
+This project follows **PSR-12** coding standards. Maintain code quality:
+
+```bash
+# Check code style
+./vendor/bin/phpcs
+
+# Fix code style automatically
+./vendor/bin/phpcbf
+```
+
+## 🚨 Troubleshooting
+
+### Common Issues and Solutions
+
+#### Calendar Not Loading
+**Issue**: Calendar page shows blank or loading forever
+```bash
+# Solution: Ensure both servers are running
+php artisan serve     # Terminal 1
+npm run dev          # Terminal 2
+
+# Check if FullCalendar dependencies are installed
+npm ls @fullcalendar/vue3
+```
+
+#### Frontend Assets Not Compiling  
+**Issue**: CSS/JS changes not reflecting, build errors
+```bash
+# Clear cache and rebuild
+npm run build
+php artisan config:clear
+php artisan view:clear
+
+# Check for dependency conflicts
+npm install --legacy-peer-deps
+```
+
+#### Database Connection Errors
+**Issue**: Migration or seeding failures
+```bash
+# Verify database configuration
+php artisan config:clear
+php artisan migrate:status
+
+# Reset database if needed
+php artisan migrate:fresh --seed
+```
+
+#### User Disappearing After Tab Switch
+**Issue**: Newly created users vanish when switching browser tabs
+**Solution**: Fixed in UserManagement/Index.vue - filters now properly sync with URL state
+
+#### Space Status Not Updating
+**Issue**: Space assignments not reflected in calendar
+**Solution**: Space assignment now forces page reload (`preserveState: false`) to ensure data consistency
+
+#### Permission Denied Errors
+**Issue**: Cannot create/edit resources
+```bash
+# Check Laravel permissions
+php artisan cache:clear
+php artisan route:clear
+
+# Verify user roles in database
+php artisan tinker
+>>> User::with('role')->get()
+```
+
+### Development Tips
+
+#### Debugging Frontend Issues
+```bash
+# Enable Vue devtools in browser
+npm install --save-dev @vue/devtools
+
+# Check browser console for errors
+# Inspect Network tab for failed requests
+```
+
+#### Database Debugging
+```bash
+# Enable query logging in .env
+DB_LOG_QUERIES=true
+
+# View recent queries
+tail -f storage/logs/laravel.log
+```
+
+#### Performance Issues
+```bash
+# Optimize for development
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+
+# Monitor with Telescope (if installed)
+php artisan telescope:install
+```
+
+### Getting Help
+
+1. **Check Laravel Logs**: `storage/logs/laravel.log`
+2. **Browser Console**: Developer tools for frontend errors  
+3. **Network Tab**: Monitor API requests and responses
+4. **Vue Devtools**: Install browser extension for component debugging
+
+### Development Workflow
+
+```bash
+# Daily development startup
+git pull origin main
+composer install
+npm install
+php artisan migrate
+npm run dev &           # Background process
+php artisan serve       # Foreground process
+```
+
+## 🔧 Development Setup
+
+### Required Services
+Both backend and frontend development servers need to be running:
+
+```bash
+# Terminal 1: Laravel backend server
+php artisan serve
+# Serves on http://127.0.0.1:8000
+
+# Terminal 2: Vite frontend development server  
+npm run dev
+# Serves assets on http://localhost:5173
+```
+
 ### 🔑 Default Login Credentials
 
 After running the seeder, you can use this admin account:
@@ -163,14 +334,50 @@ npm run build
 | `name` | String | Customer name |
 | `email` | String (Unique) | Customer email |
 | `phone` | String (Nullable) | Phone number |
-| `company` | String (Nullable) | Company name |
+| `company_name` | String (Nullable) | Company name (standardized) |
+| `contact_person` | String (Nullable) | Primary contact person |
 | `address` | Text (Nullable) | Customer address |
 | `status` | Enum | active/inactive |
-| `service_type` | String (Nullable) | Selected service type |
-| `service_price` | Decimal (Nullable) | Price of selected service |
-| `service_start_time` | Timestamp (Nullable) | Service start time |
-| `service_end_time` | Timestamp (Nullable) | Service end time |
 | `amount_paid` | Decimal | Amount paid (default: 0) |
+| `space_type_id` | Foreign Key (Nullable) | Assigned space type |
+| `created_at`, `updated_at` | Timestamps | Record timestamps |
+
+### Reservations Table
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | Primary Key | Unique identifier |
+| `user_id` | Foreign Key | Reference to users table |
+| `customer_id` | Foreign Key | Reference to customers table |
+| `space_id` | Foreign Key | Reference to spaces table |
+| `start_time` | Timestamp | Reservation start time |
+| `end_time` | Timestamp (Nullable) | Reservation end time |
+| `hourly_rate` | Decimal | Rate charged per hour |
+| `total_cost` | Decimal (Nullable) | Total calculated cost |
+| `status` | Enum | active/completed/cancelled |
+| `created_at`, `updated_at` | Timestamps | Record timestamps |
+
+### Spaces Table
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | Primary Key | Unique identifier |
+| `name` | String | Space name/identifier |
+| `space_type_id` | Foreign Key | Reference to space_types table |
+| `status` | Enum | available/occupied/maintenance |
+| `current_customer_id` | Foreign Key (Nullable) | Currently assigned customer |
+| `occupied_from` | Timestamp (Nullable) | Occupation start time |
+| `occupied_until` | Timestamp (Nullable) | Planned occupation end time |
+| `hourly_rate` | Decimal (Nullable) | Space-specific hourly rate |
+| `created_at`, `updated_at` | Timestamps | Record timestamps |
+
+### Space Types Table
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | Primary Key | Unique identifier |
+| `name` | String | Space type name |
+| `default_price` | Decimal | Default hourly rate |
+| `hourly_rate` | Decimal (Nullable) | Current hourly rate |
+| `default_discount_hours` | Integer (Nullable) | Hours before discount applies |
+| `default_discount_percentage` | Decimal (Nullable) | Discount percentage |
 | `created_at`, `updated_at` | Timestamps | Record timestamps |
 
 ### 👤 User Roles & Permissions
@@ -179,6 +386,7 @@ npm run build
 | **ADMIN** | System Administrator | Full system access, user management, all CRUD operations |
 | **STAFF** | Staff Member | Customer management, service management, view reports |
 | **CUSTOMER** | Customer User | View own profile, access customer portal |
+
 ### 🏢 Available Co-workspace Services
 | Service Type | Price | Description |
 |--------------|-------|-------------|
@@ -187,6 +395,44 @@ npm run build
 | **EXCLUSIVE SPACE** | ₱60 | Private dedicated workspace |
 | **PRIVATE SPACE** | ₱50 | Individual quiet workspace |
 | **DRAFTING TABLE** | ₱50 | Specialized technical workspace |
+
+## 🗺️ Application Routes & Navigation
+
+### Main Dashboard Routes
+- `/dashboard` - Main dashboard with space overview and statistics
+- `/calendar` - FullCalendar view showing all reservations and space occupancy
+- `/space-management` - Real-time space allocation and pricing management
+- `/customers` - Customer CRUD operations and service assignment
+- `/user-management` - Admin-only user management with filtering
+
+### Key Features by Route
+
+#### Dashboard (`/dashboard`)
+- **Spaces Overview**: Color-coded grid showing all spaces and availability
+- **Quick Statistics**: Total customers, active reservations, revenue metrics
+- **Recent Activity**: Latest reservations and customer actions
+
+#### Calendar (`/calendar`) 
+- **FullCalendar Integration**: Month/week/day views with reservation details
+- **Interactive Tooltips**: Hover for space, customer, timing, and cost details
+- **Responsive Design**: Optimized for desktop and mobile viewing
+
+#### Space Management (`/space-management`)
+- **Real-time Status**: Live updates of space availability with countdown timers
+- **Dynamic Pricing**: Configure hourly rates and discount systems
+- **Quick Assignment**: Modal-based customer assignment with search
+- **Bulk Operations**: Edit pricing across multiple space types
+
+#### Customer Management (`/customers`)
+- **Advanced Filtering**: Search by company, contact, status
+- **Reservation History**: Complete spending history and points tracking
+- **Standardized Data**: Consistent company name and contact information
+
+#### User Management (`/user-management`) - Admin Only
+- **Role-based Access**: Admin, Staff, and Customer role management
+- **Enhanced Filtering**: Persistent search and role filtering
+- **Activity Tracking**: Login history and user statistics
+- **Batch Operations**: Activate/deactivate multiple users
 
 ## 🛣 API Routes
 
@@ -240,16 +486,21 @@ class Customer extends Model
 {
     // Fillable fields for mass assignment
     protected $fillable = [
-        'name', 'email', 'phone', 'company', 'address', 'status',
-        'service_type', 'service_price', 'service_start_time', 
-        'service_end_time', 'amount_paid'
+        'user_id',
+        'company_name',
+        'contact_person',
+        'email',
+        'phone',
+        'address',
+        'website',
+        'status',
+        'notes',
+        'amount_paid',
+        'space_type_id',
     ];
 
     // Type casting for better data handling
     protected $casts = [
-        'service_start_time' => 'datetime',
-        'service_end_time' => 'datetime',
-        'service_price' => 'decimal:2',
         'amount_paid' => 'decimal:2',
     ];
 
@@ -257,27 +508,10 @@ class Customer extends Model
     const STATUS_ACTIVE = 'active';
     const STATUS_INACTIVE = 'inactive';
 
-    // Available service types with predefined pricing
-    public static function getServiceTypes()
-    {
-        return [
-            'CONFERENCE ROOM' => 350,
-            'SHARED SPACE' => 40,
-            'EXCLUSIVE SPACE' => 60,
-            'PRIVATE SPACE' => 50,
-            'DRAFTING TABLE' => 50,
-        ];
-    }
-
     // Formatted price accessors
-    public function getFormattedServicePriceAttribute()
-    {
-        return $this->service_price ? '₱' . number_format($this->service_price, 2) : null;
-    }
-
     public function getFormattedAmountPaidAttribute()
     {
-        return '₱' . number_format($this->amount_paid, 2);
+        return $this->amount_paid ? '₱' . number_format($this->amount_paid, 2) : '₱0.00';
     }
 }
 ```

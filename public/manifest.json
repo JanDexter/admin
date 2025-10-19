@@ -2,7 +2,7 @@
   "name": "Customer Management Dashboard",
   "short_name": "CustomerDash",
   "description": "A modern customer management dashboard",
-  "start_url": "/dashboard",
+  "start_url": "/coz-control/dashboard",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#3b82f6",
@@ -65,21 +65,21 @@
       "name": "Dashboard",
       "short_name": "Dashboard",
       "description": "Go to customer dashboard",
-      "url": "/dashboard",
+  "url": "/coz-control/dashboard",
       "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
     },
     {
       "name": "Customers",
       "short_name": "Customers",
       "description": "Manage customers",
-      "url": "/customers",
+  "url": "/coz-control/customers",
       "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
     },
     {
       "name": "Add Customer",
       "short_name": "Add Customer",
       "description": "Add new customer",
-      "url": "/customers/create",
+  "url": "/coz-control/customers/create",
       "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
     }
   ]

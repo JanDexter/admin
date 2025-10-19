@@ -3,14 +3,14 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
-defineProps({
+const props = defineProps({
     users: Object,
     stats: Object,
     filters: Object,
 });
 
-const searchQuery = ref('');
-const selectedRole = ref('');
+const searchQuery = ref(props.filters?.search || '');
+const selectedRole = ref(props.filters?.role || '');
 
 const search = () => {
     router.get(route('user-management.index'), {
@@ -18,6 +18,7 @@ const search = () => {
         role: selectedRole.value,
     }, {
         preserveState: true,
+        preserveScroll: true,
         replace: true,
     });
 };
@@ -25,7 +26,10 @@ const search = () => {
 const clearFilters = () => {
     searchQuery.value = '';
     selectedRole.value = '';
-    router.get(route('user-management.index'));
+    router.get(route('user-management.index'), {}, {
+        preserveState: false,
+        replace: true,
+    });
 };
 
 const getRoleColor = (role) => {

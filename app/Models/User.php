@@ -143,4 +143,12 @@ class User extends Authenticatable // implements MustVerifyEmail // Commented ou
     {
         return $this->hasMany(Service::class);
     }
+
+    /**
+     * Get reservations made by this user
+     */
+    public function reservations()
+    {
+        return $this->hasMany(Reservation::class);
+    }
 }

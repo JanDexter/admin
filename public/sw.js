@@ -1,27 +1,18 @@
-const CACHE_NAME = 'admin-dashboard-v1';
+const CACHE_NAME = 'admin-dashboard-v2';
 const urlsToCache = [
   '/',
   '/dashboard',
   '/customers',
-  '/tasks',
-  '/build/assets/app.css',
-  '/build/assets/app.js',
-  '/manifest.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png'
+  '/offline.html',
+  // Note: Vite build files are hashed; rely on runtime caching instead of precaching exact asset names
 ];
 
 // Install event - cache resources
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Opened cache');
-        return cache.addAll(urlsToCache);
-      })
-      .catch(error => {
-        console.log('Cache failed:', error);
-      })
+      .then(cache => cache.addAll(urlsToCache))
+      .catch(() => {/* ignore */})
   );
 });
 
@@ -33,6 +24,14 @@ self.addEventListener('fetch', event => {
     requestUrl = new URL(event.request.url);
   } catch (e) {
     // If URL parsing fails, let the request go to network
+    return;
+  }
+
+  // For the root page, always go to the network first.
+  if (requestUrl.pathname === '/') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match('/offline.html'))
+    );
     return;
   }
 
@@ -85,16 +84,9 @@ self.addEventListener('fetch', event => {
 // Activate event - clean up old caches
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      return Promise.all(
-        cacheNames.map(cacheName => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    caches.keys().then(cacheNames => Promise.all(
+      cacheNames.map(name => name !== CACHE_NAME ? caches.delete(name) : null)
+    ))
   );
 });
 

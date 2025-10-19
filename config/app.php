@@ -123,4 +123,19 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Admin Portal Paths
+    |--------------------------------------------------------------------------
+    |
+    | These options let you move the admin entry points away from obvious URLs.
+    | Adjust the environment variables to change where the login screen and
+    | authenticated dashboard live without touching route files.
+    |
+    */
+
+    'admin_login_path' => env('ADMIN_LOGIN_PATH', 'coz-control-access'),
+
+    'admin_area_prefix' => env('ADMIN_AREA_PREFIX', 'coz-control'),
+
 ];
