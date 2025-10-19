@@ -444,7 +444,7 @@ const confirmPayment = () => {
                                 </div>
                                 <div class="relative h-64 md:h-96">
                                     <iframe
-                                        src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3959.5857486968936!2d125.60851287499635!3d7.067384992941682!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x32f96d9999999999%3A0x1234567890abcdef!2sCO-Z%20Co-Workspace%20%26%20Study%20Hub!5e0!3m2!1sen!2sph!4v1234567890123!5m2!1sen!2sph"
+                                        src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3959.437653207681!2d125.61698390000001!3d7.075150600000001!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x44b5c51ae0e0e1ff%3A0x3cd38af7400ae41d!2sCO-Z%20co-workspace%20%26%20study%20hub!5e0!3m2!1sen!2sph!4v1760885073382!5m2!1sen!2sph"
                                         class="absolute inset-0 w-full h-full border-0"
                                         allowfullscreen
                                         loading="lazy"
