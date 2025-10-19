@@ -18,8 +18,11 @@ class RegisteredUserController extends Controller
     /**
      * Display the registration view.
      */
-    public function create(): Response
+    public function create(): Response|RedirectResponse
     {
+        if (User::exists()) {
+            return redirect()->route('login')->with('status', 'Registration is disabled. Please ask the admin to create your account.');
+        }
         return Inertia::render('Auth/Register');
     }
 
@@ -30,6 +33,10 @@ class RegisteredUserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        if (User::exists()) {
+            return redirect()->route('login');
+        }
+
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
@@ -40,6 +47,7 @@ class RegisteredUserController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+            'role' => 'admin', // First user is always an admin
         ]);
 
         event(new Registered($user));

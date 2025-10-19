@@ -33,17 +33,14 @@ Route::get('/health', function () {
     return response()->json(['status' => 'ok']);
 });
 
-// Public reservation endpoint
-Route::post('/public/reservations', [PublicReservationController::class, 'store'])->name('public.reservations.store');
+// The registration routes are now handled by the controller and auth.php
+// Route::any('/register', function () {
+//     return redirect()->route('login')->with('status', 'Registration is disabled. Please ask the admin to create your account.');
+// });
 
-// Explicitly catch any attempt to access /register and redirect to login
-Route::any('/register', function () {
-    return redirect()->route('login')->with('status', 'Registration is disabled. Please ask the admin to create your account.');
-});
-
-Route::any($adminPrefix.'/register', function () {
-    return redirect()->route('login')->with('status', 'Registration is disabled. Please ask the admin to create your account.');
-});
+// Route::any($adminPrefix.'/register', function () {
+//     return redirect()->route('login')->with('status', 'Registration is disabled. Please ask the admin to create your account.');
+// });
 
 // Authenticated admin area behind configurable prefix
 Route::middleware(['auth'])->prefix($adminPrefix)->group(function () {

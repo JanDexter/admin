@@ -15,10 +15,10 @@ $adminLoginPath = trim(config('app.admin_login_path', 'coz-control-access'), '/'
 $adminAreaPrefix = trim(config('app.admin_area_prefix', 'coz-control'), '/');
 
 Route::middleware('guest')->group(function () use ($adminLoginPath) {
-    // Registration is disabled - only admin can create accounts via user management
-    // Route::get('register', [RegisteredUserController::class, 'create'])
-    //     ->name('register');
-    // Route::post('register', [RegisteredUserController::class, 'store']);
+    // Registration is now handled by the controller
+    Route::get('register', [RegisteredUserController::class, 'create'])
+        ->name('register');
+    Route::post('register', [RegisteredUserController::class, 'store']);
 
     Route::get($adminLoginPath, [AuthenticatedSessionController::class, 'create'])
         ->name('login');
