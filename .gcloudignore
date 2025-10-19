@@ -1,0 +1,14 @@
+# Add these to your .gitignore if not already present
+
+# Environment files
+.env.production
+.env.gcp
+
+# GCP credentials
+gcp-credentials.json
+service-account-key.json
+
+# Build artifacts
+/public/hot
+/public/storage
+/storage/*.key

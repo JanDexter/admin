@@ -1,0 +1,65 @@
+runtime: php84
+env: standard
+
+instance_class: F2
+
+automatic_scaling:
+  min_instances: 1
+  max_instances: 10
+  target_cpu_utilization: 0.65
+
+env_variables:
+  APP_ENV: production
+  APP_DEBUG: false
+  LOG_CHANNEL: stderr
+  SESSION_DRIVER: database
+  CACHE_DRIVER: database
+  QUEUE_CONNECTION: database
+  # Set these in GCP Secret Manager and reference them
+  # APP_KEY will be set via .env or Secret Manager
+  # DB credentials will be set for Cloud SQL connection
+
+handlers:
+  # Serve static assets from public directory
+  - url: /build
+    static_dir: public/build
+    expiration: "1y"
+  
+  - url: /icons
+    static_dir: public/icons
+    expiration: "1y"
+  
+  - url: /img
+    static_dir: public/img
+    expiration: "1y"
+  
+  - url: /favicon.ico
+    static_files: public/favicon.ico
+    upload: public/favicon.ico
+    expiration: "1y"
+  
+  - url: /manifest.json
+    static_files: public/manifest.json
+    upload: public/manifest.json
+  
+  - url: /robots.txt
+    static_files: public/robots.txt
+    upload: public/robots.txt
+  
+  - url: /sw.js
+    static_files: public/sw.js
+    upload: public/sw.js
+  
+  # All other requests go to Laravel
+  - url: /.*
+    script: auto
+    secure: always
+
+# Skip files that shouldn't be uploaded
+skip_files:
+  - ^(.*/)?\.git(/.*)?$
+  - ^(.*/)?node_modules(/.*)?$
+  - ^(.*/)?tests(/.*)?$
+  - ^(.*/)?storage/logs(/.*)?$
+  - ^(.*/)?\.env$
+  - ^(.*/)?\.env\..*$
