@@ -3,7 +3,6 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import { computed, ref, watchEffect, onMounted, onBeforeUnmount } from 'vue';
 import logo from '../../../img/logo.png';
 import heroImage from '../../../img/customer_view/Exclusive Space.jpg';
-import locationImage from '../../../img/customer_view/location.png';
 import gcashLogo from '../../../img/customer_view/GCash_logo.svg';
 import mayaLogo from '../../../img/customer_view/Maya_logo.svg';
 // Removed payment logos; availability card no longer shown
@@ -443,11 +442,18 @@ const confirmPayment = () => {
                                     <h2 class="text-xl md:text-2xl font-semibold text-[#2f4686]">We are across Holy Cross of Davao College</h2>
                                     <p class="text-sm text-slate-600">Corner Monteverde and Narra Street, Davao City. Landmarks include McDonald’s, BPI, and Craft Shop.</p>
                                 </div>
-                                <div class="relative h-64 md:h-72">
-                                    <img :src="locationImage" alt="Map to CO-Z" class="absolute inset-0 w-full h-full object-cover" />
+                                <div class="relative h-64 md:h-96">
+                                    <iframe
+                                        src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3959.5857486968936!2d125.60851287499635!3d7.067384992941682!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x32f96d9999999999%3A0x1234567890abcdef!2sCO-Z%20Co-Workspace%20%26%20Study%20Hub!5e0!3m2!1sen!2sph!4v1234567890123!5m2!1sen!2sph"
+                                        class="absolute inset-0 w-full h-full border-0"
+                                        allowfullscreen
+                                        loading="lazy"
+                                        referrerpolicy="no-referrer-when-downgrade"
+                                        title="CO-Z Location Map"
+                                    ></iframe>
                                 </div>
                                 <div class="p-6 md:p-7 flex flex-col gap-3">
-                                    <a href="https://maps.app.goo.gl/8c4Td4oMEtXTKzXz6" target="_blank" rel="noreferrer" class="inline-flex items-center justify-center gap-2 bg-[#2f4686] hover:bg-[#3956a3] text-white font-semibold uppercase tracking-wide text-xs sm:text-sm px-5 py-2.5 rounded-full transition-colors">
+                                    <a href="https://maps.app.goo.gl/k2AieTiSTTVetSvMA" target="_blank" rel="noreferrer" class="inline-flex items-center justify-center gap-2 bg-[#2f4686] hover:bg-[#3956a3] text-white font-semibold uppercase tracking-wide text-xs sm:text-sm px-5 py-2.5 rounded-full transition-colors">
                                         Open in Google Maps
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
                                             <path d="M12 2C8.144 2 5 5.144 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.856-3.144-7-7-7zm0 9.5c-1.38 0-2.5-1.121-2.5-2.5S10.62 6.5 12 6.5s2.5 1.121 2.5 2.5S13.38 11.5 12 11.5z" />
