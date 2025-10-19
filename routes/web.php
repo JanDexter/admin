@@ -33,6 +33,11 @@ Route::get('/health', function () {
     return response()->json(['status' => 'ok']);
 });
 
+// Public reservation endpoint - now requires authentication
+Route::post('/public/reservations', [PublicReservationController::class, 'store'])
+    ->middleware('auth')
+    ->name('public.reservations.store');
+
 // The registration routes are now handled by the controller and auth.php
 // Route::any('/register', function () {
 //     return redirect()->route('login')->with('status', 'Registration is disabled. Please ask the admin to create your account.');

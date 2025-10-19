@@ -21,6 +21,10 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    auth: {
+        type: Object,
+        required: true,
+    },
 });
 
 const slideshowModules = import.meta.glob('../../../img/slideshow/*.{jpg,jpeg,png,webp}', { eager: true, import: 'default' });
@@ -279,6 +283,13 @@ const selectPayment = (method) => {
 
 const confirmPayment = () => {
     if (!selectedPayment.value || !selectedSpace.value) return;
+
+    // If user is not authenticated, redirect to login before processing payment.
+    if (!props.auth.user) {
+        router.visit(route('login', { redirect: route('customer.view') }));
+        return;
+    }
+
     const payload = {
         space_type_id: selectedSpace.value.id,
         payment_method: selectedPayment.value,
@@ -319,12 +330,12 @@ const confirmPayment = () => {
                             <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                         </svg>
                     </a>
-                    <Link :href="route('login')" class="hidden sm:inline-flex items-center gap-2 text-xs sm:text-sm font-semibold uppercase tracking-wide text-[#2f4686] hover:text-[#3956a3]">
+                    <a href="#spaces" class="hidden sm:inline-flex items-center gap-2 text-xs sm:text-sm font-semibold uppercase tracking-wide text-[#2f4686] hover:text-[#3956a3]">
                         Book Online
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
                         </svg>
-                    </Link>
+                    </a>
                 </nav>
             </div>
         </header>
@@ -383,12 +394,12 @@ const confirmPayment = () => {
                                             <a href="#location" class="inline-flex items-center justify-center gap-3 border border-white/40 text-white hover:bg-white/15 font-semibold text-sm md:text-base tracking-wide uppercase px-6 py-3 rounded-full transition-colors">
                                                 Explore Spaces
                                             </a>
-                                            <Link :href="route('login')" class="inline-flex items-center justify-center gap-3 bg-white text-[#1c2f59] hover:bg-[#ebefff] font-semibold text-sm md:text-base tracking-wide uppercase px-6 py-3 rounded-full transition-colors">
+                                            <a href="#spaces" class="inline-flex items-center justify-center gap-3 bg-white text-[#1c2f59] hover:bg-[#ebefff] font-semibold text-sm md:text-base tracking-wide uppercase px-6 py-3 rounded-full transition-colors">
                                                 Book Online
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
                                                 </svg>
-                                            </Link>
+                                            </a>
                                         </div>
                                     </div>
 

@@ -32,7 +32,9 @@ This project is a Customer Management Dashboard. It provides a comprehensive int
 *   **Smart State Management:** Enhanced tab switching without data loss.
 *   **Responsive UI:** Built with Tailwind CSS for a mobile-first experience.
 *   **PWA Ready:** Can be installed as a Progressive Web App.
-*   **Secure Access:** Public registration disabled - only admin can create accounts.
+*   **Secure Access:** Public registration is automatically disabled after the first admin user is created.
+*   **Google Sign-In:** Allow users to register and log in using their Google account.
+*   **Two-Factor Authentication (2FA):** Enhanced security with time-based one-time passwords (TOTP).
 
 ## 🆕 Recent Updates (September 2025)
 
@@ -138,10 +140,9 @@ Before running this application, ensure you have the following installed:
    npm run build
    ```
 
-8. **Seed the database with initial users**
-   ```bash
-   php artisan db:seed --class=UserRoleSeeder
-   ```
+8. **Create the First Admin User**
+   
+   Once the application is running, navigate to `/register` in your browser to create the first user. This user will automatically be assigned the `admin` role. After this initial registration, the `/register` route will be disabled.
 
 ### 🎯 Running the Application
 
@@ -295,15 +296,15 @@ npm run dev
 # Serves assets on http://localhost:5173
 ```
 
-### 🔑 Default Login Credentials
+### 🔑 Creating the First Admin User
 
-After running the seeder, you can use this admin account:
+Public registration is enabled only when there are no users in the database. To create your administrator account:
 
-| Role | Email | Password | Description |
-|------|-------|----------|-------------|
-| **Admin** | `admin@admin.com` | `password` | Full system access |
+1.  Start your application servers (`php artisan serve` and `npm run dev`).
+2.  Navigate to `http://localhost:8000/register` in your browser.
+3.  Fill out the registration form.
 
-**Note:** Public registration is disabled. Only the admin can create new user accounts through the User Management dashboard.
+This first user will be automatically granted `admin` privileges. After this account is created, the registration page will be disabled to prevent public sign-ups. Subsequent users must be created by an admin via the **User Management** dashboard.
 
 #### Production Deployment
 
@@ -324,6 +325,11 @@ npm run build
 | `password` | String (Hashed) | Encrypted password |
 | `role` | Enum | customer/staff/admin |
 | `is_active` | Boolean | User active status |
+| `google_id` | String (Nullable) | Google OAuth user ID |
+| `avatar` | String (Nullable) | URL to user's Google avatar |
+| `two_factor_secret` | Text (Nullable) | Encrypted secret for 2FA |
+| `two_factor_recovery_codes` | Text (Nullable) | Encrypted recovery codes for 2FA |
+| `two_factor_confirmed_at` | Timestamp (Nullable) | When 2FA was confirmed |
 | `remember_token` | String | Remember me token |
 | `created_at`, `updated_at` | Timestamps | Record timestamps |
 
@@ -467,10 +473,10 @@ npm run build
 | GET | `/login` | Show login form |
 | POST | `/login` | Process login |
 | POST | `/logout` | Logout user |
-| GET | `/forgot-password` | Show forgot password form |
-| POST | `/forgot-password` | Send reset link |
+| GET | `/auth/google` | Redirect to Google for authentication |
+| GET | `/auth/google/callback` | Handle Google OAuth callback |
 
-> **Note:** Public registration has been disabled for security. Only administrators can create new user accounts via the User Management dashboard.
+> **Note:** Public registration is automatically disabled after the first user is created. Only administrators can create new user accounts via the User Management dashboard.
 
 ## 🏗 Models and Architecture
 
@@ -624,6 +630,11 @@ DB_PORT=3306
 DB_DATABASE=admin_dashboard
 DB_USERNAME=root
 DB_PASSWORD=
+
+# Google OAuth Credentials
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_REDIRECT_URI=http://localhost/auth/google/callback
 
 # Session & Cache (Development)
 SESSION_DRIVER=file

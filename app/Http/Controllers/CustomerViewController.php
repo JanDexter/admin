@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\SpaceType;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 
@@ -41,6 +42,9 @@ class CustomerViewController extends Controller
 
         return Inertia::render('CustomerView/Index', [
             'spaceTypes' => $spaceTypes,
+            'auth' => [
+                'user' => Auth::user(),
+            ],
         ]);
     }
 }

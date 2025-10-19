@@ -31,8 +31,8 @@ This is a full-stack Laravel + Vue.js application. The backend is powered by Lar
 2. **Database:**
    - Create the database in MySQL.
    - Run migrations: `php artisan migrate --force`
-   - Seed users: `php artisan db:seed --class=UserRoleSeeder`
-   - By default, only one admin account is created. Only the admin can add new accounts via the dashboard. There are no staff accounts yet.
+   - Seed users: `php artisan migrate --seed`
+   - By default, the database is empty. The first user to register at `/register` becomes the admin.
 3. **Frontend Build:**
    - Install dependencies: `npm install`
    - Build assets: `npm run build`
@@ -53,9 +53,9 @@ This is a full-stack Laravel + Vue.js application. The backend is powered by Lar
   4. Vue updates UI based on response.
 
 ## Default Accounts
-- Admin: `admin@admin.com` / `password`
+- The first user to register via the `/register` endpoint will be created as an admin. After that, registration is disabled.
 
-> **Note:** Only the admin account is created by default. Public registration is disabled. Only administrators can create new user accounts via the User Management dashboard.
+> **Note:** Public registration is disabled after the first user is created. Only administrators can create new user accounts via the User Management dashboard.
 
 ## Troubleshooting
 - If you see SQL or Redis connection errors, check `.env` for correct host values (`localhost` for local, `database`/`redis` for Docker).

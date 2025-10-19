@@ -5,11 +5,17 @@ namespace App\Http\Controllers;
 use App\Models\Reservation;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class PublicReservationController extends Controller
 {
     public function store(Request $request)
     {
+        // This route now requires authentication
+        if (!Auth::check()) {
+            return redirect()->route('login');
+        }
+
         $validated = $request->validate([
             'space_type_id' => 'required|exists:space_types,id',
             'payment_method' => 'required|in:gcash,maya,cash',
@@ -23,6 +29,7 @@ class PublicReservationController extends Controller
             : ($validated['hours'] ?? 1);
 
         $reservation = Reservation::create([
+            'user_id' => Auth::id(), // Associate the reservation with the logged-in user
             'space_type_id' => $validated['space_type_id'],
             'payment_method' => $validated['payment_method'],
             'hours' => $hours,
