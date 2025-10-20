@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\SpaceType;
 use App\Models\Space;
+use App\Models\SpaceType;
 use App\Models\Customer;
+use App\Models\Reservation;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class SpaceManagementController extends Controller
@@ -105,6 +108,80 @@ class SpaceManagementController extends Controller
         }
 
         return redirect()->back()->with('success', "Space {$space->name} has been assigned.");
+    }
+
+    public function startOpenTime(Request $request, Space $space)
+    {
+        $request->validate([
+            'customer_id' => 'required|exists:customers,id',
+        ]);
+
+        if ($space->status !== 'available') {
+            return back()->with('error', 'Space is not available.');
+        }
+
+        DB::transaction(function () use ($request, $space) {
+            $space->update([
+                'status' => 'occupied',
+                'current_customer_id' => $request->customer_id,
+                'occupied_from' => Carbon::now(),
+                'occupied_until' => null, // Open time
+            ]);
+
+            Reservation::create([
+                'user_id' => auth()->id(),
+                'customer_id' => $request->customer_id,
+                'space_id' => $space->id,
+                'start_time' => $space->occupied_from,
+                'end_time' => null,
+                'hourly_rate' => $space->spaceType->price_per_hour,
+                'status' => 'active',
+                'is_open_time' => true,
+            ]);
+
+            $space->spaceType->decrement('available_slots');
+        });
+
+        return back()->with('success', 'Open time started successfully.');
+    }
+
+    public function endOpenTime(Space $space)
+    {
+        $reservation = Reservation::where('space_id', $space->id)
+            ->where('is_open_time', true)
+            ->whereNull('end_time')
+            ->first();
+
+        if (!$reservation) {
+            return back()->with('error', 'No active open time session found for this space.');
+        }
+
+        DB::transaction(function () use ($space, $reservation) {
+            $endTime = Carbon::now();
+            $startTime = Carbon::parse($reservation->start_time);
+            $durationInHours = $startTime->diffInHours($endTime);
+            if ($durationInHours < 1) {
+                $durationInHours = 1; // Minimum 1 hour charge
+            }
+            $totalCost = $durationInHours * $reservation->hourly_rate;
+
+            $reservation->update([
+                'end_time' => $endTime,
+                'total_cost' => $totalCost,
+                'status' => 'completed',
+            ]);
+
+            $space->update([
+                'status' => 'available',
+                'current_customer_id' => null,
+                'occupied_from' => null,
+                'occupied_until' => null,
+            ]);
+
+            $space->spaceType->increment('available_slots');
+        });
+
+        return back()->with('success', 'Open time ended successfully. Total cost calculated.');
     }
 
     // Create a new space type or increase slots for an existing one (sub spaces)

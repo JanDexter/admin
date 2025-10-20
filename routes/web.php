@@ -9,6 +9,7 @@ use App\Http\Controllers\SpaceManagementController;
 use App\Http\Controllers\PublicReservationController;
 use App\Http\Controllers\CustomerViewController;
 use App\Http\Controllers\CalendarController;
+use App\Http\Controllers\AccountingController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -87,6 +88,8 @@ Route::middleware(['auth'])->prefix($adminPrefix)->group(function () {
         Route::delete('space-management/spaces/{space}', [SpaceManagementController::class, 'destroySpace'])->name('space-management.destroy-space');
         Route::delete('space-management/space-types/{spaceType}/spaces', [SpaceManagementController::class, 'bulkDestroySpaces'])->name('space-management.bulk-destroy-spaces');
         Route::delete('space-management/space-types/{spaceType}', [SpaceManagementController::class, 'destroySpaceType'])->name('space-management.destroy-space-type');
+        Route::post('space-management/spaces/{space}/start-open-time', [SpaceManagementController::class, 'startOpenTime'])->name('space-management.start-open-time');
+        Route::post('space-management/spaces/{space}/end-open-time', [SpaceManagementController::class, 'endOpenTime'])->name('space-management.end-open-time');
     });
     
     // Profile routes
@@ -94,9 +97,11 @@ Route::middleware(['auth'])->prefix($adminPrefix)->group(function () {
     Route::patch('profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    Route::get('calendar', [CalendarController::class, 'index'])
-        ->middleware('verified')
-        ->name('calendar');
+    Route::get('calendar', [CalendarController::class, 'index'])->name('calendar');
+
+    // Accounting routes
+    Route::get('accounting', [AccountingController::class, 'index'])->name('accounting.index');
 });
 
 require __DIR__.'/auth.php';
+

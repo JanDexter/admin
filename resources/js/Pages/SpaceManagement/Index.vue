@@ -128,7 +128,25 @@ const selectedCustomer = computed(() => {
 
 const confirmAssign = () => {
     if (!assignment.value.customer_id) return;
-    assignToCustomer(assignment.value.customer_id);
+
+    // Check if this is for a regular assignment or an open time session
+    const space = findSpaceById(selectedSpaceForAssignment.value);
+    if (space && space.occupied_until === null && space.status === 'occupied') {
+        // This is likely an open time session being started
+        router.post(route('space-management.start-open-time', selectedSpaceForAssignment.value), {
+            customer_id: assignment.value.customer_id,
+        }, {
+            preserveState: false,
+            onFinish: () => {
+                assigningSpace.value = null;
+                selectedSpaceForAssignment.value = null;
+                showCustomerModal.value = false;
+                resetAssignment();
+            }
+        });
+    } else {
+        assignToCustomer(assignment.value.customer_id);
+    }
 };
 
 const resetAssignment = () => {
@@ -150,6 +168,25 @@ const updatePricing = (spaceTypeId, newPrice) => {
 };
 
 const minDateTimeLocal = () => new Date(Date.now() - (new Date().getTimezoneOffset()*60000)).toISOString().slice(0,16);
+
+const startOpenTime = (space) => {
+    selectedSpaceForAssignment.value = space.id;
+    // Simplified: just need to select a customer
+    resetAssignment();
+    if (hasCustomers.value) {
+        showCustomerModal.value = true;
+    } else {
+        showCreateCustomerForm.value = true;
+    }
+};
+
+const endOpenTime = (space) => {
+    if (confirm('End open time session for this space? The total cost will be calculated.')) {
+        router.post(route('space-management.end-open-time', space.id), {}, {
+            preserveState: false,
+        });
+    }
+};
 
 const assignSpace = (spaceId) => {
     selectedSpaceForAssignment.value = spaceId;
@@ -497,6 +534,15 @@ const deleteSpaceType = (spaceType) => {
         onFinish: () => { deletingType.value[spaceType.id] = false; }
     });
 };
+
+// Utility function to find a space by id
+const findSpaceById = (spaceId) => {
+    for (const spaceType of props.spaceTypes) {
+        const space = spaceType.spaces.find(s => s.id === spaceId);
+        if (space) return space;
+    }
+    return null;
+};
 </script>
 
 <template>
@@ -699,7 +745,15 @@ const deleteSpaceType = (spaceType) => {
                                         </button>
 
                                         <button
-                                            v-if="space.status === 'occupied'"
+                                            v-if="space.status === 'available'"
+                                            @click="startOpenTime(space)"
+                                            class="flex-1 bg-green-500 hover:bg-green-600 text-white text-xs py-1 px-2 rounded"
+                                        >
+                                            Open Time
+                                        </button>
+
+                                        <button
+                                            v-if="space.status === 'occupied' && space.occupied_until"
                                             @click="releaseSpace(space.id)"
                                             class="relative flex-1 bg-red-500 hover:bg-red-600 text-white text-xs py-1 px-2 rounded"
                                         >
@@ -707,6 +761,14 @@ const deleteSpaceType = (spaceType) => {
                                             <span v-if="space.occupied_until" class="absolute -top-2 -right-2 bg-gray-800 text-white text-xxs px-1 rounded-full">
                                                 {{ getTimeUntilFree(space) }}
                                             </span>
+                                        </button>
+
+                                        <button
+                                            v-if="space.status === 'occupied' && !space.occupied_until"
+                                            @click="endOpenTime(space)"
+                                            class="flex-1 bg-orange-500 hover:bg-orange-600 text-white text-xs py-1 px-2 rounded"
+                                        >
+                                            End Open Time
                                         </button>
 
                                         <button
