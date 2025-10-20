@@ -18,7 +18,8 @@ class AuthenticatedSessionController extends Controller
      */
     public function create(): Response
     {
-        $canRegister = \App\Models\User::count() === 0;
+        // Registration remains open for customers; controller assigns roles safely
+        $canRegister = true;
         return Inertia::render('Auth/Login', [
             'canResetPassword' => Route::has('password.request'),
             'status' => session('status'),
@@ -33,10 +34,14 @@ class AuthenticatedSessionController extends Controller
     {
         $request->authenticate();
 
-        $request->session()->regenerate();
+    session()->regenerate();
 
-        // Always redirect to dashboard after login for admin users
-        return redirect()->route('dashboard');
+        // Redirect based on role to prevent customers from entering the admin area
+        $user = Auth::user();
+        if ($user && $user->isAdmin()) {
+            return redirect()->route('dashboard');
+        }
+        return redirect()->route('customer.view');
     }
 
     /**

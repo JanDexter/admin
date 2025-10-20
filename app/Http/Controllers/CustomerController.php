@@ -60,15 +60,13 @@ class CustomerController extends Controller
             'name' => 'required|string|max:255',
             'company_name' => 'nullable|string|max:255',
             'email' => 'required|email|max:255|unique:customers,email',
-            'phone' => ['nullable','regex:/^09\d{9}$/'],
+            'phone' => ['nullable', 'string', 'min:10', 'max:15'],
             'address' => 'nullable|string',
             'website' => 'nullable|string|max:255',
             'status' => 'required|in:active,inactive',
             'notes' => 'nullable|string',
             'amount_paid' => 'nullable|numeric|min:0',
             'space_type_id' => 'nullable|exists:space_types,id',
-        ], [
-            'phone.regex' => 'Phone must start with 09 and be 11 digits.',
         ]);
 
     $validated['user_id'] = Auth::id();
@@ -93,11 +91,24 @@ class CustomerController extends Controller
 
     public function show(Customer $customer)
     {
-        $customer->load(['tasks' => function ($query) {
-            $query->with('user')->orderBy('created_at', 'desc');
-        }]);
-
-    $user = Auth::user();
+        // Load reservations with relationships, sorted by status priority and date
+        $customer->load([
+            'reservations' => function ($query) {
+                $query->with(['spaceType', 'space', 'user'])
+                    ->orderByRaw("
+                        CASE 
+                            WHEN status IN ('pending', 'on_hold') THEN 1
+                            WHEN status IN ('confirmed', 'active') THEN 2
+                            WHEN status IN ('paid') THEN 3
+                            ELSE 4
+                        END
+                    ")
+                    ->orderBy('created_at', 'desc');
+            },
+            'spaceType'
+        ]);
+        
+        $user = Auth::user();
         if (! $user->isAdmin() && $customer->user_id !== $user->id) {
             abort(403);
         }
@@ -123,14 +134,12 @@ class CustomerController extends Controller
             'name' => 'required|string|max:255',
             'company_name' => 'nullable|string|max:255',
             'email' => 'required|email|max:255|unique:customers,email,' . $customer->id,
-            'phone' => ['nullable','regex:/^09\d{9}$/'],
+            'phone' => ['nullable', 'string', 'min:10', 'max:15'],
             'address' => 'nullable|string',
             'website' => 'nullable|string|max:255',
             'status' => 'required|in:active,inactive',
             'notes' => 'nullable|string',
             'amount_paid' => 'nullable|numeric|min:0',
-        ], [
-            'phone.regex' => 'Phone must start with 09 and be 11 digits.',
         ]);
 
         $validated['company_name'] = strip_tags($validated['company_name'] ?? '');

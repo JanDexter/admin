@@ -42,17 +42,19 @@ const submit = () => {
   });
 };
 const onPhoneInput = (e) => {
-  let v = e.target.value.replace(/\D/g, '');
-  // Normalize 63xxxxxxxxxx -> 09xxxxxxxxx when pattern matches
-  if (/^63(9\d{9})$/.test(v)) v = '0' + RegExp.$1;
-  if (/^9\d{9}$/.test(v)) v = '0' + v; // 9xxxxxxxxx -> 09xxxxxxxxx
-  if (v.length > 11) v = v.slice(0, 11);
-  form.phone = v;
+  const value = e.target.value ?? '';
+  const hasPlus = value.trim().startsWith('+');
+  let digits = value.replace(/\D/g, '');
+  if (digits.length > 15) {
+    digits = digits.slice(0, 15);
+  }
+  form.phone = hasPlus ? `+${digits}` : digits;
 };
 
 const phoneError = computed(() => {
   if (!form.phone) return '';
-  return /^09\d{9}$/.test(form.phone) ? '' : 'Phone must start with 09 and be 11 digits.';
+  const digits = form.phone.startsWith('+') ? form.phone.slice(1) : form.phone;
+  return digits.length >= 10 && digits.length <= 15 ? '' : 'Phone must include 10 to 15 digits.';
 });
 
 </script>
@@ -83,7 +85,7 @@ const phoneError = computed(() => {
               </div>
               <div>
                 <label for="customer_phone" class="block text-sm font-medium text-gray-700">Phone</label>
-                <input v-model="form.phone" @input="onPhoneInput" inputmode="numeric" pattern="09\\d{9}" maxlength="11" placeholder="09XXXXXXXXX" type="tel" id="customer_phone" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" />
+                <input v-model="form.phone" @input="onPhoneInput" inputmode="tel" placeholder="09XXXXXXXXX or +639XXXXXXXXX" type="tel" id="customer_phone" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" />
                 <div v-if="phoneError || form.errors.phone" class="mt-1 text-sm" :class="phoneError ? 'text-red-600' : 'text-red-600'">
                   {{ form.errors.phone || phoneError }}
                 </div>

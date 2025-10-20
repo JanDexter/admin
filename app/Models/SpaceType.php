@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 class SpaceType extends Model
 {
@@ -18,6 +19,7 @@ class SpaceType extends Model
         'total_slots',
         'available_slots',
         'description',
+        'photo_path',
     ];
 
     protected $casts = [
@@ -29,6 +31,11 @@ class SpaceType extends Model
     public function spaces()
     {
         return $this->hasMany(Space::class);
+    }
+
+    public function reservations()
+    {
+        return $this->hasMany(Reservation::class);
     }
 
     public function customers()
@@ -97,5 +104,54 @@ class SpaceType extends Model
     public function getOccupiedSpaces()
     {
         return $this->spaces()->where('status', 'occupied')->count();
+    }
+
+    /**
+     * Get real-time available capacity for a specific time window.
+     * Returns the number of slots that can still be booked.
+     */
+    public function getAvailableCapacity(\Carbon\Carbon $start, ?\Carbon\Carbon $end = null, ?int $excludeReservationId = null)
+    {
+        $totalCapacity = (int) ($this->total_slots ?? 0);
+        $spaceUnits = $this->spaces()->count();
+
+        $baseQuery = \App\Models\Reservation::query()
+            ->active()
+            ->where(function ($query) {
+                $query->where('space_type_id', $this->id)
+                    ->orWhereHas('space', function ($spaceQuery) {
+                        $spaceQuery->where('space_type_id', $this->id);
+                    });
+            })
+            ->when($excludeReservationId, function ($query) use ($excludeReservationId) {
+                $query->where('id', '!=', $excludeReservationId);
+            })
+            ->overlapping($start, $end);
+
+        $seatBasedCapacity = null;
+        if ($totalCapacity > 0) {
+            $overlappingPax = (clone $baseQuery)->sum(DB::raw('CASE WHEN pax IS NULL OR pax < 1 THEN 1 ELSE pax END'));
+            $seatBasedCapacity = max(0, $totalCapacity - $overlappingPax);
+        }
+
+        $spaceBasedCapacity = null;
+        if ($spaceUnits > 0) {
+            $occupiedUnits = (clone $baseQuery)->count();
+            $spaceBasedCapacity = max(0, $spaceUnits - $occupiedUnits);
+        }
+
+        if (!is_null($seatBasedCapacity) && !is_null($spaceBasedCapacity)) {
+            return min($seatBasedCapacity, $spaceBasedCapacity);
+        }
+
+        if (!is_null($seatBasedCapacity)) {
+            return $seatBasedCapacity;
+        }
+
+        if (!is_null($spaceBasedCapacity)) {
+            return $spaceBasedCapacity;
+        }
+
+        return 0;
     }
 }

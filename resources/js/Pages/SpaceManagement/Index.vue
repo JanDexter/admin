@@ -3,6 +3,15 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, router, Link, useForm } from '@inertiajs/vue3';
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import CustomerQuickCreateModal from '@/Components/CustomerQuickCreateModal.vue';
+import PaymentModal from '@/Components/PaymentModal.vue';
+
+const onRowClick = (space, event) => {
+    if (event.target.closest('a, button, input')) {
+        return;
+    }
+    // Assuming you have a route for showing space details
+    // router.get(route('space-management.show', space.id));
+};
 
 const props = defineProps({
     spaceTypes: Array,
@@ -14,10 +23,24 @@ const assigningSpace = ref(null);
 const showCustomerModal = ref(false);
 const selectedSpaceForAssignment = ref(null);
 const showCreateCustomerForm = ref(false);
+const customerSearch = ref('');
+const customerInputDirty = ref(false);
+const showCustomerDropdown = ref(false);
+const highlightedCustomerIndex = ref(0);
+const customerDropdownRef = ref(null);
+const showPaymentModal = ref(false);
+const selectedPaymentSpace = ref(null);
+const isOpenTimeMode = ref(false); // Track if we're starting an open time session
 // Pricing modal state
 const showPricingModalId = ref(null); // spaceTypeId or null
 const pricingForm = ref({ hourly_rate: '', default_discount_hours: '', default_discount_percentage: '' });
 const pricingErrors = ref({ hourly_rate: '', default_discount_hours: '', default_discount_percentage: '' });
+
+// Details modal state (name, description, photo)
+const showDetailsModalId = ref(null); // spaceTypeId or null
+const detailsForm = ref({ name: '', description: '', photo: null, remove_photo: false });
+const detailsErrors = ref({ name: '', description: '', photo: '' });
+const detailsPreviewUrl = ref('');
 
 // Local toast notifications
 const toast = ref({ show: false, type: 'success', message: '' });
@@ -26,6 +49,96 @@ const showToast = (message, type = 'success', duration = 3000) => {
     toast.value = { show: true, type, message };
     if (toastTimerId) clearTimeout(toastTimerId);
     toastTimerId = setTimeout(() => { toast.value.show = false; }, duration);
+};
+// Open Time UI state
+const openTimeSubmitting = ref(false);
+
+const openDetailsModal = (spaceType) => {
+    showDetailsModalId.value = spaceType.id;
+    detailsForm.value = {
+        name: spaceType.name || '',
+        description: spaceType.description || '',
+        photo: null,
+        remove_photo: false,
+    };
+    detailsErrors.value = { name: '', description: '', photo: '' };
+    // Try to use server photo if present for initial preview
+    detailsPreviewUrl.value = spaceType.photo_path ? (route('customer.view') + 'storage/' + spaceType.photo_path).replace(/\/\/+/, '/') : '';
+};
+
+const closeDetailsModal = () => {
+    showDetailsModalId.value = null;
+};
+
+const onPhotoSelected = (e) => {
+    const file = e?.target?.files?.[0] || null;
+    detailsForm.value.photo = file;
+    detailsForm.value.remove_photo = false;
+    if (detailsPreviewUrl.value) try { URL.revokeObjectURL(detailsPreviewUrl.value); } catch(_) {}
+    detailsPreviewUrl.value = file ? URL.createObjectURL(file) : '';
+};
+
+const validateDetails = () => {
+    detailsErrors.value = { name: '', description: '', photo: '' };
+    let ok = true;
+    const v = detailsForm.value || {};
+    if (!v.name || !String(v.name).trim()) {
+        detailsErrors.value.name = 'Name is required';
+        ok = false;
+    }
+    if (v.photo) {
+        const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!allowed.includes(v.photo.type)) {
+            detailsErrors.value.photo = 'Photo must be JPG, PNG, or WEBP';
+            ok = false;
+        }
+        const maxBytes = 5 * 1024 * 1024;
+        if (v.photo.size > maxBytes) {
+            detailsErrors.value.photo = 'Photo must be smaller than 5MB';
+            ok = false;
+        }
+    }
+    return ok;
+};
+
+const savingDetails = ref(false);
+const saveDetailsModal = () => {
+    const id = showDetailsModalId.value;
+    if (!id) return;
+    if (!validateDetails()) return;
+    savingDetails.value = true;
+
+    const formData = new FormData();
+    formData.append('_method', 'PATCH');
+    formData.append('name', detailsForm.value.name || '');
+    formData.append('description', detailsForm.value.description || '');
+    if (detailsForm.value.photo) {
+        formData.append('photo', detailsForm.value.photo);
+    }
+    if (detailsForm.value.remove_photo && !detailsForm.value.photo) {
+        formData.append('remove_photo', '1');
+    }
+
+    router.post(route('space-management.update-details', id), formData, {
+        forceFormData: true,
+        preserveScroll: true,
+        onError: (errors) => {
+            detailsErrors.value.name = errors?.name || '';
+            detailsErrors.value.description = errors?.description || '';
+            detailsErrors.value.photo = errors?.photo || '';
+            showToast('Failed to save details. Please check the form and try again.', 'error');
+            savingDetails.value = false;
+        },
+        onSuccess: () => {
+            savingDetails.value = false;
+            closeDetailsModal();
+            showToast('Details updated successfully.', 'success');
+            router.reload({ only: ['spaceTypes'] });
+        },
+        onFinish: () => {
+            savingDetails.value = false;
+        }
+    });
 };
 
 const hasCustomers = computed(() => props.customers && props.customers.length > 0);
@@ -38,15 +151,57 @@ const newCustomerForm = useForm({
     status: 'active',
 });
 
-// Assignment form state
-const assignment = ref({
-    customer_id: null,
-    start_time: new Date().toISOString().slice(0,16), // yyyy-MM-ddTHH:mm for datetime-local
-    occupied_until: '',
-    custom_hourly_rate: '',
-});
+const getRoundedNow = () => {
+    const now = new Date();
+    now.setSeconds(0, 0);
+    return now;
+};
 
-// Global ticking ref to refresh countdowns periodically
+const toLocalDateTimeInput = (date) => {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+    const normalized = new Date(date.getTime());
+    normalized.setSeconds(0, 0);
+    const offsetMs = normalized.getTimezoneOffset() * 60000;
+    return new Date(normalized.getTime() - offsetMs).toISOString().slice(0, 16);
+};
+
+const nowLocalDateTime = () => toLocalDateTimeInput(getRoundedNow());
+
+const computeDefaultEndTime = (startValue) => {
+    if (!startValue) return '';
+    const startDate = new Date(startValue);
+    if (Number.isNaN(startDate.getTime())) return '';
+    startDate.setSeconds(0, 0);
+    startDate.setHours(startDate.getHours() + 1);
+    return toLocalDateTimeInput(startDate);
+};
+
+const getDefaultAssignment = () => {
+    const start = nowLocalDateTime();
+    return {
+        customer_id: null,
+        start_time: start,
+        occupied_until: computeDefaultEndTime(start),
+        custom_hourly_rate: '',
+    };
+};
+
+// Assignment form state
+const assignment = ref(getDefaultAssignment());
+
+const startTimeDirty = ref(false);
+const endTimeDirty = ref(false);
+let startTimeSyncId = null;
+
+const updateStartTimeToNow = () => {
+    const start = nowLocalDateTime();
+    assignment.value.start_time = start;
+    startTimeDirty.value = false;
+    assignment.value.occupied_until = computeDefaultEndTime(start);
+    endTimeDirty.value = false;
+};
+
+// Global ticking ref to refresh countdowns in real-time
 const nowTick = ref(Date.now());
 let tickIntervalId = null;
 
@@ -87,9 +242,10 @@ const scheduleAllReleaseTimers = () => {
 };
 
 onMounted(() => {
-    // Tick every 30s to refresh countdown text
-    tickIntervalId = setInterval(() => { nowTick.value = Date.now(); }, 30000);
+    // Tick every 1 second for real-time countdown/countup updates
+    tickIntervalId = setInterval(() => { nowTick.value = Date.now(); }, 1000);
     scheduleAllReleaseTimers();
+    document.addEventListener('click', onClickOutsideCustomerDropdown);
 });
 
 onBeforeUnmount(() => {
@@ -97,6 +253,8 @@ onBeforeUnmount(() => {
     for (const [, id] of releaseTimers) clearTimeout(id);
     releaseTimers.clear();
     if (toastTimerId) clearTimeout(toastTimerId);
+    stopStartTimeSync();
+    document.removeEventListener('click', onClickOutsideCustomerDropdown);
 });
 
 // Reschedule timers when spaces update
@@ -104,18 +262,19 @@ watch(() => props.spaceTypes, () => {
     scheduleAllReleaseTimers();
 }, { deep: true });
 
-const customerSearch = ref('');
-const filteredCustomers = computed(() => {
-    if (!props.customers) return [];
-    const q = customerSearch.value.toLowerCase().trim();
-    if (!q) return props.customers;
-    return props.customers.filter(c => [
-        c.name,
-        c.company_name,
-        c.contact_person,
-        c.email,
-        c.phone
-    ].filter(Boolean).some(v => String(v).toLowerCase().includes(q)));
+watch(showCustomerModal, (visible) => {
+    if (visible) {
+        customerSearch.value = '';
+        customerInputDirty.value = false;
+        showCustomerDropdown.value = false;
+        highlightedCustomerIndex.value = 0;
+        updateStartTimeToNow();
+        startStartTimeSync();
+    } else {
+        stopStartTimeSync();
+        startTimeDirty.value = false;
+        showCustomerDropdown.value = false;
+    }
 });
 
 const displayName = (c) => {
@@ -123,39 +282,228 @@ const displayName = (c) => {
 };
 
 const selectedCustomer = computed(() => {
-    return filteredCustomers.value.find(c => c.id === assignment.value.customer_id) || props.customers?.find(c => c.id === assignment.value.customer_id) || null;
+    return props.customers?.find(c => c.id === assignment.value.customer_id) || null;
 });
+
+const activeCustomerQuery = computed(() => {
+    if (!customerInputDirty.value && assignment.value.customer_id) {
+        return '';
+    }
+    return customerSearch.value;
+});
+
+const filteredCustomers = computed(() => {
+    const allCustomers = props.customers || [];
+    const query = activeCustomerQuery.value.toLowerCase().trim();
+    if (!query) return allCustomers;
+
+    const terms = query.split(/\s+/).filter(Boolean);
+    if (!terms.length) return allCustomers;
+
+    return allCustomers.filter((customer) => {
+        const searchableValues = [
+            customer.id,
+            customer.name,
+            customer.company_name,
+            customer.contact_person,
+            customer.email,
+            customer.phone,
+            customer.phone ? String(customer.phone).replace(/[^0-9+]/g, '') : null,
+        ]
+            .filter(Boolean)
+            .map((value) => String(value).toLowerCase());
+
+        if (!searchableValues.length) return false;
+
+        return terms.every((term) =>
+            searchableValues.some((value) => value.includes(term))
+        );
+    });
+});
+
+watch(filteredCustomers, (list) => {
+    if (!list.length) {
+        highlightedCustomerIndex.value = -1;
+        return;
+    }
+    if (highlightedCustomerIndex.value < 0 || highlightedCustomerIndex.value >= list.length) {
+        highlightedCustomerIndex.value = 0;
+    }
+});
+
+watch(() => assignment.value.customer_id, (id) => {
+    if (!id) {
+        if (!customerInputDirty.value) {
+            customerSearch.value = '';
+        }
+        return;
+    }
+    const customer = props.customers?.find((c) => c.id === id);
+    if (customer) {
+        customerSearch.value = displayName(customer);
+        customerInputDirty.value = false;
+    }
+});
+
+watch(() => props.customers, () => {
+    if (!assignment.value.customer_id || customerInputDirty.value) return;
+    const customer = props.customers?.find((c) => c.id === assignment.value.customer_id);
+    if (customer) {
+        customerSearch.value = displayName(customer);
+    }
+});
+
+const updateEndTimeFromStart = () => {
+    if (endTimeDirty.value) return;
+    if (!assignment.value.start_time) {
+        assignment.value.occupied_until = '';
+        return;
+    }
+    const candidate = computeDefaultEndTime(assignment.value.start_time);
+    assignment.value.occupied_until = candidate;
+};
+
+watch(() => assignment.value.start_time, () => {
+    updateEndTimeFromStart();
+});
+
+const openCustomerDropdown = () => {
+    showCustomerDropdown.value = true;
+    if (filteredCustomers.value.length) {
+        highlightedCustomerIndex.value = Math.max(0, Math.min(highlightedCustomerIndex.value, filteredCustomers.value.length - 1));
+    } else {
+        highlightedCustomerIndex.value = -1;
+    }
+};
+
+const closeCustomerDropdown = () => {
+    showCustomerDropdown.value = false;
+    if (filteredCustomers.value.length) {
+        highlightedCustomerIndex.value = Math.max(0, Math.min(highlightedCustomerIndex.value, filteredCustomers.value.length - 1));
+    } else {
+        highlightedCustomerIndex.value = -1;
+    }
+};
+
+const onCustomerInput = (event) => {
+    const value = event?.target?.value ?? '';
+    customerSearch.value = value;
+    customerInputDirty.value = true;
+    assignment.value.customer_id = null;
+    openCustomerDropdown();
+};
+
+const selectCustomer = (customer) => {
+    if (!customer) return;
+    assignment.value.customer_id = customer.id;
+    customerSearch.value = displayName(customer);
+    customerInputDirty.value = false;
+    closeCustomerDropdown();
+};
+
+const highlightNextCustomer = () => {
+    if (!filteredCustomers.value.length) return;
+    if (!showCustomerDropdown.value) {
+        openCustomerDropdown();
+    }
+    if (highlightedCustomerIndex.value < 0) {
+        highlightedCustomerIndex.value = 0;
+        return;
+    }
+    highlightedCustomerIndex.value = (highlightedCustomerIndex.value + 1) % filteredCustomers.value.length;
+};
+
+const highlightPrevCustomer = () => {
+    if (!filteredCustomers.value.length) return;
+    if (!showCustomerDropdown.value) {
+        openCustomerDropdown();
+    }
+    if (highlightedCustomerIndex.value < 0) {
+        highlightedCustomerIndex.value = filteredCustomers.value.length - 1;
+        return;
+    }
+    highlightedCustomerIndex.value = (highlightedCustomerIndex.value - 1 + filteredCustomers.value.length) % filteredCustomers.value.length;
+};
+
+const selectHighlightedCustomer = () => {
+    if (highlightedCustomerIndex.value < 0) return;
+    const customer = filteredCustomers.value[highlightedCustomerIndex.value];
+    if (customer) {
+        selectCustomer(customer);
+    }
+};
+
+const clearCustomerSelection = () => {
+    assignment.value.customer_id = null;
+    customerSearch.value = '';
+    customerInputDirty.value = true;
+    openCustomerDropdown();
+};
+
+const onClickOutsideCustomerDropdown = (event) => {
+    if (!customerDropdownRef.value) return;
+    if (customerDropdownRef.value.contains(event.target)) return;
+    showCustomerDropdown.value = false;
+};
 
 const confirmAssign = () => {
     if (!assignment.value.customer_id) return;
 
-    // Check if this is for a regular assignment or an open time session
-    const space = findSpaceById(selectedSpaceForAssignment.value);
-    if (space && space.occupied_until === null && space.status === 'occupied') {
-        // This is likely an open time session being started
-        router.post(route('space-management.start-open-time', selectedSpaceForAssignment.value), {
-            customer_id: assignment.value.customer_id,
-        }, {
-            preserveState: false,
-            onFinish: () => {
-                assigningSpace.value = null;
-                selectedSpaceForAssignment.value = null;
-                showCustomerModal.value = false;
-                resetAssignment();
+    if (isOpenTimeMode.value) {
+        // Start open time session and reload spaceTypes
+        openTimeSubmitting.value = true;
+        router.post(
+            route('space-management.start-open-time', selectedSpaceForAssignment.value),
+            { customer_id: assignment.value.customer_id },
+            {
+                preserveState: false,
+                onSuccess: () => {
+                    showToast('Open time started.', 'success');
+                    showCustomerModal.value = false;
+                    resetAssignment();
+                    router.get(route('space-management.index'), {}, { preserveState: false, only: ['spaceTypes'] });
+                },
+                onError: (errors) => {
+                    const msg = (errors && (errors.customer_id || errors.error)) || 'Failed to start open time.';
+                    showToast(String(msg), 'error', 5000);
+                },
+                onFinish: () => {
+                    openTimeSubmitting.value = false;
+                    assigningSpace.value = null;
+                    selectedSpaceForAssignment.value = null;
+                },
             }
-        });
-    } else {
-        assignToCustomer(assignment.value.customer_id);
+        );
+        return;
     }
+    // Regular assignment
+    assignToCustomer(assignment.value.customer_id);
 };
 
 const resetAssignment = () => {
-    assignment.value = {
-        customer_id: null,
-        start_time: new Date().toISOString().slice(0,16),
-        occupied_until: '',
-        custom_hourly_rate: '',
-    };
+    assignment.value = getDefaultAssignment();
+    startTimeDirty.value = false;
+    endTimeDirty.value = false;
+    isOpenTimeMode.value = false; // Reset open time mode
+};
+
+const startStartTimeSync = () => {
+    if (startTimeSyncId) clearInterval(startTimeSyncId);
+    startTimeSyncId = setInterval(() => {
+        if (!showCustomerModal.value || startTimeDirty.value) return;
+        const latest = nowLocalDateTime();
+        if (assignment.value.start_time !== latest) {
+            assignment.value.start_time = latest;
+        } else {
+            updateEndTimeFromStart();
+        }
+    }, 5000);
+};
+
+const stopStartTimeSync = () => {
+    if (!startTimeSyncId) return;
+    clearInterval(startTimeSyncId);
+    startTimeSyncId = null;
 };
 
 const updatePricing = (spaceTypeId, newPrice) => {
@@ -167,12 +515,12 @@ const updatePricing = (spaceTypeId, newPrice) => {
     });
 };
 
-const minDateTimeLocal = () => new Date(Date.now() - (new Date().getTimezoneOffset()*60000)).toISOString().slice(0,16);
+const minDateTimeLocal = () => nowLocalDateTime();
 
 const startOpenTime = (space) => {
     selectedSpaceForAssignment.value = space.id;
-    // Simplified: just need to select a customer
     resetAssignment();
+    isOpenTimeMode.value = true; // Mark this as open time mode AFTER reset
     if (hasCustomers.value) {
         showCustomerModal.value = true;
     } else {
@@ -184,12 +532,20 @@ const endOpenTime = (space) => {
     if (confirm('End open time session for this space? The total cost will be calculated.')) {
         router.post(route('space-management.end-open-time', space.id), {}, {
             preserveState: false,
+            onSuccess: () => {
+                showToast('Open time ended and transaction saved.', 'success');
+                router.get(route('space-management.index'), {}, { preserveState: false, only: ['spaceTypes'] });
+            },
+            onError: () => {
+                showToast('Failed to end open time.', 'error');
+            }
         });
     }
 };
 
 const assignSpace = (spaceId) => {
     selectedSpaceForAssignment.value = spaceId;
+    isOpenTimeMode.value = false; // Not open time mode
     resetAssignment();
     if (hasCustomers.value) {
         showCustomerModal.value = true;
@@ -201,19 +557,53 @@ const assignSpace = (spaceId) => {
 const assignToCustomer = (customerId) => {
     assigningSpace.value = selectedSpaceForAssignment.value;
     
+    // If in open time mode, use different route without time validation
+    if (isOpenTimeMode.value) {
+        const payload = {
+            customer_id: customerId,
+        };
+        
+        router.post(route('space-management.start-open-time', selectedSpaceForAssignment.value), payload, {
+            preserveState: false,
+            onFinish: () => {
+                assigningSpace.value = null;
+                selectedSpaceForAssignment.value = null;
+                showCustomerModal.value = false;
+                isOpenTimeMode.value = false;
+                resetAssignment();
+            }
+        });
+        return;
+    }
+    
+    // Normal assignment flow with time validation
     const payload = {
         customer_id: customerId,
     };
-    if (assignment.value.start_time) {
-        if (new Date(assignment.value.start_time) < new Date()) {
-            alert('Start time must be now or in the future.');
+    let startString = assignment.value.start_time;
+    if (!startString) {
+        updateStartTimeToNow();
+        startString = assignment.value.start_time;
+    }
+    const startDate = new Date(startString);
+    const now = getRoundedNow();
+    if (startDate < now) {
+        showToast('Start time must be now or in the future.', 'error');
+        updateStartTimeToNow();
+        assigningSpace.value = null;
+        return;
+    }
+    payload.start_time = startString;
+    if (assignment.value.occupied_until) {
+        const occupiedUntilDate = new Date(assignment.value.occupied_until);
+        if (occupiedUntilDate < now) {
+            alert('End time must be in the future.');
+            assigningSpace.value = null;
             return;
         }
-        payload.start_time = assignment.value.start_time;
-    }
-    if (assignment.value.occupied_until) {
-        if (new Date(assignment.value.occupied_until) < new Date()) {
-            alert('End time must be in the future.');
+        if (occupiedUntilDate <= startDate) {
+            alert('End time must be after the start time.');
+            assigningSpace.value = null;
             return;
         }
         payload.occupied_until = assignment.value.occupied_until;
@@ -229,6 +619,18 @@ const assignToCustomer = (customerId) => {
             resetAssignment();
         }
     });
+};
+
+const onStartTimeInput = (event) => {
+    if (!event?.target?.value) {
+        updateStartTimeToNow();
+        return;
+    }
+    startTimeDirty.value = true;
+};
+
+const onEndTimeInput = () => {
+    endTimeDirty.value = true;
 };
 
 const switchToCreateForm = () => {
@@ -272,6 +674,34 @@ const releaseSpace = (spaceId) => {
     }
 };
 
+const openPaymentForSpace = (space) => {
+    // Find the active reservation for this space
+    const reservation = {
+        id: space.id,
+        customer_name: space.current_customer?.company_name || space.current_customer?.name,
+        space_name: space.name,
+        space_type: props.spaceTypes.find(st => st.spaces.some(s => s.id === space.id))?.name,
+        total_cost: 0, // Will be calculated based on time
+        cost: 0,
+    };
+    
+    // Calculate estimated cost based on time elapsed
+    if (space.occupied_from) {
+        const hours = Math.max(1, Math.floor((Date.now() - new Date(space.occupied_from).getTime()) / (1000 * 60 * 60)));
+        const rate = space.hourly_rate || props.spaceTypes.find(st => st.spaces.some(s => s.id === space.id))?.hourly_rate || 0;
+        reservation.total_cost = hours * rate;
+        reservation.cost = hours * rate;
+    }
+    
+    selectedPaymentSpace.value = reservation;
+    showPaymentModal.value = true;
+};
+
+const closePaymentModal = () => {
+    showPaymentModal.value = false;
+    selectedPaymentSpace.value = null;
+};
+
 const getStatusColor = (status) => {
     return status === 'available' 
         ? 'bg-green-100 text-green-800' 
@@ -287,7 +717,7 @@ const getOccupiedSpaces = (spaceType) => {
 };
 
 const getAvailableSpaces = (spaceType) => {
-    return spaceType.spaces.filter(space => space.status === 'available').length;
+    return spaceType.spaces.filter(space => (space.dynamic_status || space.status) === 'available').length;
 };
 
 const getOccupancyFraction = (spaceType) => {
@@ -419,12 +849,171 @@ const getTimeUntilFree = (space) => {
     const diff = until - now;
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
     
     if (hours > 0) {
-        return `${hours}h ${minutes}m`;
+        return `${hours}h ${minutes}m ${seconds}s`;
+    } else if (minutes > 0) {
+        return `${minutes}m ${seconds}s`;
     } else {
-        return `${minutes}m`;
+        return `${seconds}s`;
     }
+};
+
+// Format time for display with real-time updates
+const formatTimeDisplay = (space) => {
+    // Reference nowTick to make this reactive
+    void nowTick.value;
+    const now = new Date(nowTick.value);
+    
+    // Use active_reservation data if available, fallback to space fields
+    const startTime = space.active_reservation?.start_time || space.occupied_from;
+    const endTime = space.active_reservation?.end_time || space.occupied_until;
+    const status = space.dynamic_status || space.status;
+    
+    // Handle open time (no end time)
+    if (status === 'occupied' && !endTime && startTime) {
+        const start = new Date(startTime);
+        const elapsed = now - start;
+        const hours = Math.floor(elapsed / (1000 * 60 * 60));
+        const minutes = Math.floor((elapsed % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((elapsed % (1000 * 60)) / 1000);
+        
+        if (hours > 0) {
+            return `⏱️ ${hours}h ${minutes}m ${seconds}s elapsed`;
+        } else if (minutes > 0) {
+            return `⏱️ ${minutes}m ${seconds}s elapsed`;
+        } else {
+            return `⏱️ ${seconds}s elapsed`;
+        }
+    }
+    
+    // Handle scheduled reservation (hasn't started yet)
+    if (status === 'occupied' && startTime) {
+        const start = new Date(startTime);
+        if (start > now) {
+            const diff = start - now;
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            
+            if (hours > 0) {
+                return `🕐 Starts in ${hours}h ${minutes}m ${seconds}s`;
+            } else if (minutes > 0) {
+                return `🕐 Starts in ${minutes}m ${seconds}s`;
+            } else {
+                return `🕐 Starts in ${seconds}s`;
+            }
+        }
+    }
+    
+    // Handle countdown to end time
+    if (status === 'occupied' && endTime) {
+        const until = new Date(endTime);
+        if (until > now) {
+            const diff = until - now;
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            
+            if (hours > 0) {
+                return `⏳ ${hours}h ${minutes}m ${seconds}s remaining`;
+            } else if (minutes > 0) {
+                return `⏳ ${minutes}m ${seconds}s remaining`;
+            } else {
+                return `⏳ ${seconds}s remaining`;
+            }
+        } else {
+            return '✅ Time expired - Ready to release';
+        }
+    }
+    
+    return null;
+};
+
+// Format time for reservation (similar to space but uses reservation fields)
+const formatReservationTimeDisplay = (reservation) => {
+    // Reference nowTick to make this reactive
+    void nowTick.value;
+    const now = new Date(nowTick.value);
+    
+    // Handle open time (no end time)
+    if (!reservation.end_time && reservation.start_time) {
+        const start = new Date(reservation.start_time);
+        const elapsed = now - start;
+        const hours = Math.floor(elapsed / (1000 * 60 * 60));
+        const minutes = Math.floor((elapsed % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((elapsed % (1000 * 60)) / 1000);
+        
+        if (hours > 0) {
+            return `⏱️ ${hours}h ${minutes}m ${seconds}s elapsed`;
+        } else if (minutes > 0) {
+            return `⏱️ ${minutes}m ${seconds}s elapsed`;
+        } else {
+            return `⏱️ ${seconds}s elapsed`;
+        }
+    }
+    
+    // Handle scheduled reservation (hasn't started yet)
+    if (reservation.start_time) {
+        const start = new Date(reservation.start_time);
+        if (start > now) {
+            const diff = start - now;
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            
+            if (hours > 0) {
+                return `🕐 Starts in ${hours}h ${minutes}m ${seconds}s`;
+            } else if (minutes > 0) {
+                return `🕐 Starts in ${minutes}m ${seconds}s`;
+            } else {
+                return `🕐 Starts in ${seconds}s`;
+            }
+        }
+    }
+    
+    // Handle countdown to end time
+    if (reservation.end_time) {
+        const until = new Date(reservation.end_time);
+        if (until > now) {
+            const diff = until - now;
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            
+            if (hours > 0) {
+                return `⏳ ${hours}h ${minutes}m ${seconds}s remaining`;
+            } else if (minutes > 0) {
+                return `⏳ ${minutes}m ${seconds}s remaining`;
+            } else {
+                return `⏳ ${seconds}s remaining`;
+            }
+        } else {
+            return '✅ Time expired';
+        }
+    }
+    
+    return null;
+};
+
+const formatLocalDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' });
+};
+
+const formatLocalDateTime = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        hour: 'numeric', 
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'Asia/Manila' 
+    });
 };
 
 // Removed inline edit state in favor of modal
@@ -582,7 +1171,7 @@ const findSpaceById = (spaceId) => {
                             <div class="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
                                 <div class="md:col-span-2">
                                     <label class="block text-xs font-medium text-gray-700">Type Name</label>
-                                    <input v-model="createTypeForm.name" type="text" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm" placeholder="e.g., CAR, BIKE" />
+                                    <input v-model="createTypeForm.name" type="text" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm" placeholder="e.g., Mini Space, Conference Room" />
                                 </div>
                                 <div class="md:col-span-1">
                                     <label class="block text-xs font-medium text-gray-700">Rate (₱/h)</label>
@@ -650,6 +1239,7 @@ const findSpaceById = (spaceId) => {
                                 
                                 <!-- Actions -->
                                 <div class="ml-auto flex flex-row items-center gap-3 flex-none">
+                                    <button @click="openDetailsModal(spaceType)" class="text-xs px-3 py-1.5 rounded bg-indigo-600 text-white hover:bg-indigo-700">Edit Details</button>
                                     <button @click="openPricingModal(spaceType)" class="text-xs px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700">Edit Rate & Discount</button>
                                     <button @click="toggleAddSpace(spaceType.id)" class="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50 whitespace-nowrap">{{ showAddSpace[spaceType.id] ? 'Cancel' : 'Add Space' }}</button>
                                     <div class="flex items-center gap-2 flex-none">
@@ -694,36 +1284,44 @@ const findSpaceById = (spaceId) => {
                                 <div 
                                     v-for="space in spaceType.spaces" 
                                     :key="space.id"
-                                    class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow overflow-hidden"
+                                    class="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow overflow-hidden cursor-pointer"
+                                    @click="onRowClick(space, $event)"
                                 ><div class="flex justify-between items-start mb-3">
                                         <h4 class="font-medium text-gray-900 whitespace-nowrap truncate max-w-[60%]">{{ space.name }}</h4>
                                         <div class="text-right">
                                             <span 
-                                                :class="getStatusColor(space.status)"
+                                                :class="getStatusColor(space.dynamic_status || space.status)"
                                                 class="inline-flex px-2 py-1 text-xs font-semibold rounded-full mb-1"
                                             >
-                                                {{ space.status.toUpperCase() }}
+                                                {{ (space.dynamic_status || space.status).toUpperCase() }}
                                             </span>
-                                            <div v-if="space.status === 'occupied' && space.occupied_until" class="text-xs text-gray-500">
-                                                Free in: {{ getTimeUntilFree(space) }}
+                                            <div v-if="(space.dynamic_status || space.status) === 'occupied'" class="text-xs font-medium text-blue-600 mt-1">
+                                                {{ formatTimeDisplay(space) }}
                                             </div>
                                         </div>
                                     </div>                                    <!-- Space Details -->
-                                    <div v-if="space.status === 'occupied' && space.current_customer" class="mb-3">
+                                    <div v-if="(space.dynamic_status || space.status) === 'occupied' && (space.active_reservation || space.current_customer)" class="mb-3">
                                         <p class="text-sm text-gray-600">Occupied by:</p>
-                                        <p class="text-sm font-medium text-gray-900 truncate">{{ space.current_customer.company_name }}</p>
-                                        <p class="text-xs text-gray-500 truncate">{{ space.current_customer.contact_person }}</p><div class="flex flex-col gap-1 text-xs text-gray-500 mt-1">
-                                            <span v-if="space.occupied_from" class="truncate">
-                                                From: {{ new Date(space.occupied_from).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }}
+                                        <p class="text-sm font-medium text-gray-900 truncate">
+                                            {{ space.active_reservation ? space.active_reservation.customer.company_name || space.active_reservation.customer.name || space.current_customer_name : space.current_customer.company_name }}
+                                        </p>
+                                        <p class="text-xs text-gray-500 truncate">
+                                            {{ space.active_reservation ? (space.active_reservation.customer.contact_person || space.active_reservation.customer.email) : space.current_customer.contact_person }}
+                                        </p><div class="flex flex-col gap-1 text-xs text-gray-500 mt-1">
+                                            <span v-if="space.active_reservation?.start_time || space.occupied_from" class="truncate">
+                                                From: {{ formatLocalDateTime(space.active_reservation?.start_time || space.occupied_from) }}
                                             </span>
-                                            <span v-if="space.occupied_until" class="truncate">
-                                                Until: {{ new Date(space.occupied_until).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }}
+                                            <span v-if="space.active_reservation?.end_time || space.occupied_until" class="truncate">
+                                                Until: {{ formatLocalDateTime(space.active_reservation?.end_time || space.occupied_until) }}
+                                            </span>
+                                            <span v-else-if="!(space.active_reservation?.end_time || space.occupied_until)" class="truncate text-green-600 font-medium">
+                                                Open Time (No end limit)
                                             </span>
                                         </div>
                                     </div>
 
                                     <!-- Pricing Information -->
-                                    <div v-if="space.status === 'available'" class="mb-3 p-2 bg-green-50 rounded">
+                                    <div v-if="(space.dynamic_status || space.status) === 'available'" class="mb-3 p-2 bg-green-50 rounded">
                                         <p class="text-xs text-green-700 font-medium">Available for booking</p>
                                         <p class="text-xs text-green-600">
                                             ₱{{ space.hourly_rate || spaceType.hourly_rate || spaceType.default_price }}/hour
@@ -736,7 +1334,7 @@ const findSpaceById = (spaceId) => {
                                     <!-- Actions -->
                                     <div class="flex space-x-2">
                                         <button
-                                            v-if="space.status === 'available'"
+                                            v-if="(space.dynamic_status || space.status) === 'available'"
                                             @click="assignSpace(space.id)"
                                             class="flex-1 bg-blue-500 hover:bg-blue-600 text-white text-xs py-1 px-2 rounded"
                                             :disabled="assigningSpace === space.id"
@@ -745,7 +1343,7 @@ const findSpaceById = (spaceId) => {
                                         </button>
 
                                         <button
-                                            v-if="space.status === 'available'"
+                                            v-if="(space.dynamic_status || space.status) === 'available'"
                                             @click="startOpenTime(space)"
                                             class="flex-1 bg-green-500 hover:bg-green-600 text-white text-xs py-1 px-2 rounded"
                                         >
@@ -753,7 +1351,15 @@ const findSpaceById = (spaceId) => {
                                         </button>
 
                                         <button
-                                            v-if="space.status === 'occupied' && space.occupied_until"
+                                            v-if="(space.dynamic_status || space.status) === 'occupied'"
+                                            @click="openPaymentForSpace(space)"
+                                            class="flex-1 bg-green-500 hover:bg-green-600 text-white text-xs py-1 px-2 rounded"
+                                        >
+                                            Pay
+                                        </button>
+
+                                        <button
+                                            v-if="(space.dynamic_status || space.status) === 'occupied' && (space.active_reservation?.end_time || space.occupied_until)"
                                             @click="releaseSpace(space.id)"
                                             class="relative flex-1 bg-red-500 hover:bg-red-600 text-white text-xs py-1 px-2 rounded"
                                         >
@@ -764,7 +1370,7 @@ const findSpaceById = (spaceId) => {
                                         </button>
 
                                         <button
-                                            v-if="space.status === 'occupied' && !space.occupied_until"
+                                            v-if="(space.dynamic_status || space.status) === 'occupied' && !(space.active_reservation?.end_time || space.occupied_until)"
                                             @click="endOpenTime(space)"
                                             class="flex-1 bg-orange-500 hover:bg-orange-600 text-white text-xs py-1 px-2 rounded"
                                         >
@@ -772,7 +1378,7 @@ const findSpaceById = (spaceId) => {
                                         </button>
 
                                         <button
-                                            v-if="space.status === 'available'"
+                                            v-if="(space.dynamic_status || space.status) === 'available'"
                                             @click="deleteSpace(space)"
                                             class="flex-1 bg-white border border-red-300 text-red-700 hover:bg-red-50 text-xs py-1 px-2 rounded"
                                             :disabled="deletingSpace[space.id]"
@@ -781,6 +1387,131 @@ const findSpaceById = (spaceId) => {
                                         </button>
                                     </div>
                                 </div>                            </div>
+
+                            <!-- Unassigned Reservations (from public bookings) -->
+                            <div v-if="spaceType.unassigned_reservations && spaceType.unassigned_reservations.length > 0" class="mt-6 border-t pt-6">
+                                <h4 class="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-orange-500" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                                    </svg>
+                                    Active Online Bookings (Not Assigned to Physical Space)
+                                </h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                    <div 
+                                        v-for="reservation in spaceType.unassigned_reservations" 
+                                        :key="reservation.id"
+                                        class="border-2 border-orange-300 bg-orange-50 rounded-lg p-4 hover:shadow-md transition-shadow"
+                                    >
+                                        <div class="flex justify-between items-start mb-3">
+                                            <h4 class="font-medium text-gray-900 text-sm">Online Booking #{{ reservation.id }}</h4>
+                                            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
+                                                ACTIVE
+                                            </span>
+                                        </div>
+                                        
+                                        <!-- Time Display -->
+                                        <div class="text-xs font-medium text-blue-600 mb-3">
+                                            {{ formatReservationTimeDisplay(reservation) }}
+                                        </div>
+
+                                        <!-- Customer Details -->
+                                        <div class="mb-3">
+                                            <p class="text-sm text-gray-600">Customer:</p>
+                                            <p class="text-sm font-medium text-gray-900 truncate">{{ reservation.customer?.name || 'N/A' }}</p>
+                                            <p v-if="reservation.customer?.email" class="text-xs text-gray-500 truncate">{{ reservation.customer.email }}</p>
+                                        </div>
+
+                                        <!-- Reservation Details -->
+                                        <div class="flex flex-col gap-1 text-xs text-gray-600 mb-3 bg-white p-2 rounded">
+                                            <span class="truncate">
+                                                <strong>From:</strong> {{ formatLocalDateTime(reservation.start_time) }}
+                                            </span>
+                                            <span v-if="reservation.end_time" class="truncate">
+                                                <strong>Until:</strong> {{ formatLocalDateTime(reservation.end_time) }}
+                                            </span>
+                                            <span v-else class="truncate text-green-600 font-medium">
+                                                Open Time (No end limit)
+                                            </span>
+                                            <span v-if="reservation.pax" class="truncate">
+                                                <strong>Pax:</strong> {{ reservation.pax }} person{{ reservation.pax > 1 ? 's' : '' }}
+                                            </span>
+                                            <span v-if="reservation.hours" class="truncate">
+                                                <strong>Duration:</strong> {{ reservation.hours }} hour{{ reservation.hours > 1 ? 's' : '' }}
+                                            </span>
+                                        </div>
+
+                                        <!-- Note -->
+                                        <p class="text-xxs text-orange-700 bg-orange-100 p-2 rounded">
+                                            💡 This booking is active but hasn't been assigned to a specific physical space yet.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Details Modal -->
+                <div v-if="showDetailsModalId !== null" class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+                    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" @click="closeDetailsModal"></div>
+                        <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full">
+                            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                <div class="sm:flex sm:items-start">
+                                    <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Edit Space Type Details</h3>
+                                        <div class="space-y-3">
+                                            <div>
+                                                <label class="block text-xs font-medium text-gray-700">Name</label>
+                                                <input 
+                                                    v-model="detailsForm.name" 
+                                                    type="text"
+                                                    class="mt-1 block w-full rounded-md shadow-sm text-sm border"
+                                                    :class="detailsErrors.name ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'"
+                                                />
+                                                <p v-if="detailsErrors.name" class="mt-1 text-xxs text-red-600">{{ detailsErrors.name }}</p>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-gray-700">Description</label>
+                                                <textarea 
+                                                    v-model="detailsForm.description" 
+                                                    rows="3"
+                                                    class="mt-1 block w-full rounded-md shadow-sm text-sm border"
+                                                    :class="detailsErrors.description ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'"
+                                                />
+                                                <p v-if="detailsErrors.description" class="mt-1 text-xxs text-red-600">{{ detailsErrors.description }}</p>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-gray-700">Photo (JPG, PNG, WEBP, max 5MB)</label>
+                                                <input 
+                                                    type="file" 
+                                                    accept="image/jpeg,image/png,image/webp"
+                                                    @change="onPhotoSelected"
+                                                    class="mt-1 block w-full text-sm"
+                                                />
+                                                <div v-if="detailsPreviewUrl" class="mt-2 flex items-start gap-3">
+                                                    <img :src="detailsPreviewUrl" alt="Preview" class="w-24 h-24 object-cover rounded border" />
+                                                    <div class="text-xs text-gray-600 space-y-1">
+                                                        <p>Preview</p>
+                                                        <button type="button" class="text-red-600 hover:text-red-700"
+                                                            @click="() => { detailsForm.value.photo = null; detailsForm.value.remove_photo = true; detailsPreviewUrl.value = ''; }">
+                                                            Remove photo
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <p v-if="detailsErrors.photo" class="mt-1 text-xxs text-red-600">{{ detailsErrors.photo }}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                                <button @click="saveDetailsModal" :disabled="savingDetails" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 sm:ml-3 sm:w-auto sm:text-sm">
+                                    {{ savingDetails ? 'Saving…' : 'Save' }}
+                                </button>
+                                <button @click="closeDetailsModal" type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">Cancel</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -788,7 +1519,7 @@ const findSpaceById = (spaceId) => {
                 <!-- Customer Assignment Modal -->
                 <div v-if="showCustomerModal" class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
                     <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-                        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" @click="showCustomerModal = false"></div>
+                        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" @click="showCustomerModal = false, resetAssignment()"></div>
                         
                         <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
                         
@@ -797,20 +1528,30 @@ const findSpaceById = (spaceId) => {
                                 <div class="sm:flex sm:items-start">
                                     <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
                                         <div class="flex items-center justify-between mb-2">
-                                            <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">Assign Customer to Space</h3>
+                                            <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                                                {{ isOpenTimeMode ? 'Start Open Time Session' : 'Assign Customer to Space' }}
+                                            </h3>
                                             <button @click="refreshCustomers" class="text-xs text-blue-600 hover:text-blue-700">Refresh list</button>
                                         </div>
 
-                                        <!-- Scheduling & Rate -->
-                                        <div class="mb-4 grid grid-cols-1 gap-3">
+                                        <!-- Open Time Info -->
+                                        <div v-if="isOpenTimeMode" class="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-md">
+                                            <p class="text-sm text-orange-800 font-medium">⏱️ Open Time Session</p>
+                                            <p class="text-xs text-orange-600 mt-1">
+                                                No end time required. The session will start now and cost will be calculated when you end it.
+                                            </p>
+                                        </div>
+
+                                        <!-- Scheduling & Rate (hidden for open time) -->
+                                        <div v-if="!isOpenTimeMode" class="mb-4 grid grid-cols-1 gap-3">
                                             <div class="flex items-start gap-2">
                                                 <div class="flex-1">
                                                     <label class="block text-xs font-medium text-gray-700">Start</label>
-                                                    <input type="datetime-local" :min="minDateTimeLocal()" v-model="assignment.start_time" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm" />
+                                                    <input type="datetime-local" :min="minDateTimeLocal()" v-model="assignment.start_time" @input="onStartTimeInput" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm" />
                                                 </div>
                                                 <div class="flex-1">
                                                     <label class="block text-xs font-medium text-gray-700">End</label>
-                                                    <input type="datetime-local" :min="assignment.start_time || minDateTimeLocal()" v-model="assignment.occupied_until" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm" />
+                                                    <input type="datetime-local" :min="assignment.start_time || minDateTimeLocal()" v-model="assignment.occupied_until" @input="onEndTimeInput" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm" />
                                                 </div>
                                             </div>
                                             <div>
@@ -829,13 +1570,65 @@ const findSpaceById = (spaceId) => {
                                         <!-- Customer selection -->
                                         <div class="space-y-2">
                                             <label class="block text-xs font-medium text-gray-700">Select Customer</label>
-                                            <input type="text" v-model="customerSearch" placeholder="Search name, company, email, phone" class="block w-full rounded-md border-gray-300 shadow-sm text-sm" />
-                                            <select v-model="assignment.customer_id" class="mt-2 block w-full rounded-md border-gray-300 shadow-sm text-sm" :aria-label="'Customer select, '+filteredCustomers.length+' results'">
-                                                <option :value="null" disabled>Select a customer…</option>
-                                                <option v-for="c in filteredCustomers" :key="c.id" :value="c.id">
-                                                    {{ displayName(c) }} — {{ c.company_name || 'No company' }} ({{ c.email }}{{ c.phone ? ', '+c.phone : '' }})
-                                                </option>
-                                            </select>
+                                            <div ref="customerDropdownRef" class="relative">
+                                                <input
+                                                    type="text"
+                                                    :value="customerSearch"
+                                                    placeholder="Search name, company, email, phone"
+                                                    class="block w-full rounded-md border-gray-300 shadow-sm text-sm pr-9"
+                                                    @focus="openCustomerDropdown"
+                                                    @input="onCustomerInput"
+                                                    @keydown.down.prevent="highlightNextCustomer"
+                                                    @keydown.up.prevent="highlightPrevCustomer"
+                                                    @keydown.enter.prevent="selectHighlightedCustomer"
+                                                    @keydown.esc.stop.prevent="closeCustomerDropdown"
+                                                    @keydown.tab="closeCustomerDropdown"
+                                                    aria-autocomplete="list"
+                                                    role="combobox"
+                                                    :aria-expanded="showCustomerDropdown"
+                                                    aria-haspopup="listbox"
+                                                    :aria-activedescendant="highlightedCustomerIndex >= 0 && filteredCustomers[highlightedCustomerIndex] ? 'customer-option-'+filteredCustomers[highlightedCustomerIndex].id : undefined"
+                                                    autocomplete="off"
+                                                />
+                                                <button
+                                                    v-if="assignment.customer_id"
+                                                    type="button"
+                                                    @click="clearCustomerSelection"
+                                                    class="absolute inset-y-0 right-2 flex items-center text-gray-400 hover:text-gray-600"
+                                                    aria-label="Clear customer selection"
+                                                >
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                </button>
+                                                <div
+                                                    v-if="showCustomerDropdown"
+                                                    class="absolute z-10 mt-1 w-full max-h-60 overflow-auto rounded-md border border-gray-200 bg-white shadow-lg"
+                                                    role="listbox"
+                                                >
+                                                    <template v-if="filteredCustomers.length">
+                                                        <button
+                                                            v-for="(c, index) in filteredCustomers"
+                                                            :id="'customer-option-'+c.id"
+                                                            :key="c.id"
+                                                            type="button"
+                                                            class="w-full text-left px-3 py-2 text-sm"
+                                                            :class="index === highlightedCustomerIndex ? 'bg-blue-600 text-white' : 'bg-white text-gray-900 hover:bg-gray-50'"
+                                                            @mousedown.prevent
+                                                            @click="selectCustomer(c)"
+                                                            @mouseenter="highlightedCustomerIndex = index"
+                                                            :aria-selected="assignment.customer_id === c.id"
+                                                            role="option"
+                                                        >
+                                                            <div class="font-medium">{{ displayName(c) }}</div>
+                                                            <div class="text-xxs" :class="index === highlightedCustomerIndex ? 'text-blue-100' : 'text-gray-500'">
+                                                                {{ c.company_name || 'No company' }} • {{ c.email }}{{ c.phone ? ' • '+c.phone : '' }}
+                                                            </div>
+                                                        </button>
+                                                    </template>
+                                                    <div v-else class="px-3 py-2 text-sm text-gray-500">No matching customers.</div>
+                                                </div>
+                                            </div>
                                             <div v-if="selectedCustomer" class="mt-3 p-3 rounded border border-gray-200 bg-gray-50 text-sm">
                                                 <div class="font-medium text-gray-900">{{ displayName(selectedCustomer) }}</div>
                                                 <div class="text-gray-700">{{ selectedCustomer.company_name || '—' }}</div>
@@ -855,11 +1648,11 @@ const findSpaceById = (spaceId) => {
                                                 Add New Customer
                                             </button>
                                             <button
-                                                :disabled="!assignment.customer_id"
+                                                :disabled="!assignment.customer_id || openTimeSubmitting"
                                                 @click="confirmAssign"
                                                 class="flex-1 bg-blue-500 disabled:bg-blue-300 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded"
                                             >
-                                                Assign
+                                                {{ isOpenTimeMode ? (openTimeSubmitting ? 'Starting…' : 'Start Open Time') : 'Assign' }}
                                             </button>
                                         </div>
                                     </div>
@@ -867,7 +1660,7 @@ const findSpaceById = (spaceId) => {
                             </div>
                             <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                                 <button 
-                                    @click="showCustomerModal = false"
+                                    @click="showCustomerModal = false, resetAssignment()"
                                     type="button" 
                                     class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                                 >
@@ -948,6 +1741,14 @@ const findSpaceById = (spaceId) => {
                         {{ toast.message }}
                     </div>
                 </div>
+                
+                <!-- Payment Modal -->
+                <PaymentModal
+                    :show="showPaymentModal"
+                    :reservation="selectedPaymentSpace"
+                    @close="closePaymentModal"
+                    @paid="router.reload()"
+                />
             </div>
         </div>
     </AuthenticatedLayout>

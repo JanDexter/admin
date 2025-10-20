@@ -21,9 +21,7 @@ class GoogleAuthController extends Controller
         $intent = $request->query('intent', 'customer');
         session(['google_auth_intent' => $intent]);
 
-        return Socialite::driver('google')
-            ->with(['prompt' => 'select_account'])
-            ->redirect();
+        return Socialite::driver('google')->redirect();
     }
 
     /**
@@ -110,13 +108,40 @@ class GoogleAuthController extends Controller
             ]);
         }
 
-        // Store customer info in session for reservation
-        session(['google_customer' => [
-            'id'     => $customer->id,
-            'name'   => $customer->name,
-            'email'  => $customer->email,
-            'avatar' => $customer->avatar,
-        ]]);
+        // Ensure there is a corresponding user account with role 'customer'
+        $user = User::where('email', $customer->email)->first();
+        if (!$user) {
+            $user = new User([
+                'name' => $customer->name,
+                'email' => $customer->email,
+            ]);
+            $user->role = User::ROLE_CUSTOMER;
+            $user->is_active = true;
+            $user->google_id = $googleUser->getId();
+            $user->avatar = $googleUser->getAvatar();
+            // Generate a random password to satisfy not-null constraint; user signs in with Google anyway
+            $user->password = bcrypt(Str::random(32));
+            $user->save();
+        } else {
+            // Update google fields for existing user (if any)
+            $user->google_id = $user->google_id ?: $googleUser->getId();
+            $user->avatar = $googleUser->getAvatar() ?: $user->avatar;
+            if (!$user->is_active) {
+                // Don't allow deactivated users to login
+                return redirect()->route('login')
+                    ->with('error', 'Your account has been deactivated. Please contact the administrator.');
+            }
+            $user->save();
+        }
+
+        // Link customer to user if not linked
+        if (!$customer->user_id) {
+            $customer->user_id = $user->id;
+            $customer->save();
+        }
+
+        // Log in the customer user
+        Auth::login($user, true);
 
         return redirect()->route('customer.view');
     }

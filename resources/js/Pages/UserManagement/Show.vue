@@ -21,6 +21,13 @@ const getStatusColor = (isActive) => {
     return isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
 };
 
+const formatCurrency = (value) => {
+    return new Intl.NumberFormat('en-PH', {
+        style: 'currency',
+        currency: 'PHP',
+    }).format(value);
+};
+
 const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
@@ -74,6 +81,10 @@ const formatDate = (dateString) => {
                                     <div>
                                         <dt class="text-sm font-medium text-gray-500">Email Address</dt>
                                         <dd class="text-sm text-gray-900">{{ user.email }}</dd>
+                                    </div>
+                                    <div v-if="user.phone">
+                                        <dt class="text-sm font-medium text-gray-500">Phone Number</dt>
+                                        <dd class="text-sm text-gray-900">{{ user.phone }}</dd>
                                     </div>
                                     <div>
                                         <dt class="text-sm font-medium text-gray-500">User ID</dt>
@@ -179,7 +190,7 @@ const formatDate = (dateString) => {
                         <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div class="bg-gray-50 p-4 rounded-lg">
                                 <dt class="text-sm font-medium text-gray-500">Total Spent</dt>
-                                <dd class="mt-1 text-2xl font-semibold text-gray-900">₱{{ totalSpent.toLocaleString() }}</dd>
+                                <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ formatCurrency(totalSpent) }}</dd>
                             </div>
                             <div class="bg-gray-50 p-4 rounded-lg">
                                 <dt class="text-sm font-medium text-gray-500">Reward Points</dt>
@@ -191,22 +202,29 @@ const formatDate = (dateString) => {
                         <table class="min-w-full divide-y divide-gray-200">
                             <thead class="bg-gray-50">
                                 <tr>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Space</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost</th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
                                 <tr v-for="reservation in user.reservations" :key="reservation.id">
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ reservation.space.name }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ reservation.space.space_type.name }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ reservation.customer.company_name }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ formatDate(reservation.start_time) }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ formatDate(reservation.created_at) }}</td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {{ new Date(reservation.end_time).getHours() - new Date(reservation.start_time).getHours() }} hours
+                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
+                                                :class="{
+                                                'bg-green-100 text-green-800': reservation.status === 'paid' || reservation.status === 'completed',
+                                                'bg-yellow-100 text-yellow-800': reservation.status === 'hold',
+                                                'bg-red-100 text-red-800': reservation.status === 'cancelled'
+                                                }">
+                                            {{ reservation.status }}
+                                        </span>
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">₱{{ reservation.cost }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ formatCurrency(reservation.total_cost) }}</td>
                                 </tr>
                                 <tr v-if="!user.reservations.length">
                                     <td colspan="5" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">No reservations found.</td>

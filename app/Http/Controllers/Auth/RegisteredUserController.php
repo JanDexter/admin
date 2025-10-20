@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\Customer;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,9 +21,8 @@ class RegisteredUserController extends Controller
      */
     public function create(): Response|RedirectResponse
     {
-        if (User::exists()) {
-            return redirect()->route('login')->with('status', 'Registration is disabled. Please ask the admin to create your account.');
-        }
+        // Registration should be open for customers at all times.
+        // Only the very first user becomes admin; subsequent signups are customers.
         return Inertia::render('Auth/Register');
     }
 
@@ -33,27 +33,45 @@ class RegisteredUserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        if (User::exists()) {
-            return redirect()->route('login');
-        }
-
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'phone' => 'nullable|string|max:20',
         ]);
 
-        $user = User::create([
+        $isFirstUser = User::count() === 0;
+
+        $user = new User([
             'name' => $request->name,
             'email' => $request->email,
+            'phone' => $request->phone,
             'password' => Hash::make($request->password),
-            'role' => 'admin', // First user is always an admin
         ]);
+        // First user becomes admin; others are customers by default
+        $user->role = $isFirstUser ? User::ROLE_ADMIN : User::ROLE_CUSTOMER;
+        $user->is_active = true;
+        $user->save();
+
+        // Automatically create a Customer record for customer users
+        if ($user->role === User::ROLE_CUSTOMER) {
+            Customer::create([
+                'user_id' => $user->id,
+                'name' => $request->name,
+                'email' => $request->email,
+                'phone' => $request->phone,
+                'status' => 'active',
+            ]);
+        }
 
         event(new Registered($user));
 
         Auth::login($user);
 
-        return redirect(route('dashboard', absolute: false));
+        // Redirect based on role
+        if ($user->isAdmin()) {
+            return redirect()->route('dashboard');
+        }
+        return redirect()->route('customer.view');
     }
 }

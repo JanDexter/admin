@@ -1,10 +1,12 @@
 <script setup>
-import { Head, Link, router } from '@inertiajs/vue3';
-import { computed, ref, watchEffect, onMounted, onBeforeUnmount } from 'vue';
+import { Head, router } from '@inertiajs/vue3';
+import { computed, ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import logo from '../../../img/logo.png';
 import heroImage from '../../../img/customer_view/Exclusive Space.jpg';
 import gcashLogo from '../../../img/customer_view/GCash_logo.svg';
 import mayaLogo from '../../../img/customer_view/Maya_logo.svg';
+import SpaceCalendar from '../../Components/SpaceCalendar.vue';
+import ReservationDetailModal from '../../Components/ReservationDetailModal.vue';
 // Removed payment logos; availability card no longer shown
 
 // Utility: slugify labels consistently
@@ -25,7 +27,50 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    reservations: {
+        type: Array,
+        default: () => [],
+    },
 });
+
+const formatCurrency = (value) => {
+    return new Intl.NumberFormat('en-PH', {
+        style: 'currency',
+        currency: 'PHP',
+    }).format(value);
+};
+
+const getManilaNow = () => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Manila',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+    }).formatToParts(new Date());
+
+    const lookup = {};
+    parts.forEach((part) => {
+        if (part.type !== 'literal') {
+            lookup[part.type] = part.value;
+        }
+    });
+
+    return {
+        date: `${lookup.year}-${lookup.month}-${lookup.day}`,
+        time: `${lookup.hour}:${lookup.minute}`,
+    };
+};
+
+const currentManilaTime = ref(getManilaNow());
+let currentTimeTimer;
+
+const syncCurrentManilaTime = () => {
+    currentManilaTime.value = getManilaNow();
+};
+
 
 const slideshowModules = import.meta.glob('../../../img/slideshow/*.{jpg,jpeg,png,webp}', { eager: true, import: 'default' });
 const heroSlides = Object.keys(slideshowModules)
@@ -80,8 +125,60 @@ const goToHeroSlide = (index) => {
 const nextHeroSlide = () => goToHeroSlide(heroSlideIndex.value + 1);
 const prevHeroSlide = () => goToHeroSlide(heroSlideIndex.value - 1);
 
-onMounted(startHeroRotation);
-onBeforeUnmount(stopHeroRotation);
+const handleVisibilityChange = () => {
+    if (typeof document === 'undefined') return;
+    if (document.visibilityState === 'visible') {
+        syncCurrentManilaTime();
+        startHeroRotation();
+    } else {
+        stopHeroRotation();
+    }
+};
+
+onMounted(() => {
+    syncCurrentManilaTime();
+    startHeroRotation();
+    currentTimeTimer = setInterval(syncCurrentManilaTime, 60000);
+
+    if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    // Equal-height cards: recompute on mount and on resize
+    if (typeof window !== 'undefined') {
+        recomputeCardHeights();
+        window.addEventListener('resize', recomputeCardHeights);
+    }
+
+    // Attach observer to keep cards equalized as content changes
+    attachCardsResizeObserver();
+
+    // Recompute after fonts load to capture any late reflow
+    if (typeof document !== 'undefined' && document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(() => recomputeCardHeights());
+    }
+});
+
+onBeforeUnmount(() => {
+    stopHeroRotation();
+    if (currentTimeTimer) {
+        clearInterval(currentTimeTimer);
+        currentTimeTimer = undefined;
+    }
+
+    if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    if (typeof window !== 'undefined') {
+        window.removeEventListener('resize', recomputeCardHeights);
+    }
+
+    if (cardsResizeObserver) {
+        try { cardsResizeObserver.disconnect(); } catch {}
+        cardsResizeObserver = undefined;
+    }
+});
 
 const fallbackDescriptions = {
     'shared-space': 'A vibrant shared workspace perfect for students and professionals who thrive in collaborative environments.',
@@ -92,11 +189,12 @@ const fallbackDescriptions = {
 };
 
 const manualGalleryMap = {
-    'shared-space': ['shared-space', 'dsc3583', 'dsc3581', 'dsc3596', 'co-z-workspace'],
-    'exclusive-space': ['exclusive-space', 'dsc3586', 'dsc3569', 'private-space'],
-    'private-space': ['private-space', 'dsc3581', 'dsc3583', 'exclusive-space'],
-    'conference-room': ['conference-room', 'conference-room-2', 'dsc3596', 'shared-space'],
-    'drafting-table': ['drafting-table', 'dsc3586', 'dsc3569', 'co-z-workspace'],
+    // Keep only space-specific or neutral aliases; avoid cross-referencing other spaces
+    'shared-space': ['shared-space', 'dsc3583', 'dsc3581', 'dsc3596', 'co-z-workspace', 'co-z'],
+    'exclusive-space': ['exclusive-space', 'dsc3586', 'dsc3569', 'co-z-workspace', 'co-z'],
+    'private-space': ['private-space', 'dsc3581', 'dsc3583', 'co-z-workspace', 'co-z'],
+    'conference-room': ['conference-room', 'conference-room-2', 'dsc3596', 'co-z-workspace', 'co-z'],
+    'drafting-table': ['drafting-table', 'dsc3586', 'dsc3569', 'co-z-workspace', 'co-z'],
 };
 
 const customerImageModules = import.meta.glob('../../../img/customer_view/*.{jpg,jpeg,png,webp,svg}', { eager: true, import: 'default' });
@@ -121,38 +219,54 @@ const formatPrice = (value) => {
 
 const buildGallery = (slug, displayName) => {
     const normalizedSlug = toSlug(slug || displayName || 'workspace');
+    const displaySlug = toSlug(displayName || '');
     const displayLower = (displayName || '').toLowerCase();
 
-    const manual = manualGalleryMap[normalizedSlug] || manualGalleryMap[toSlug(displayName)] || [];
-    const slugCandidates = Array.from(new Set([
-        normalizedSlug,
-        toSlug(displayName),
-        ...manual.map((value) => toSlug(value)),
-    ].filter(Boolean)));
+    // Manual aliases help widen the gallery, but must NEVER outrank the exact slug
+    const manualAliases = manualGalleryMap[normalizedSlug] || manualGalleryMap[displaySlug] || [];
+    const manualAliasSlugs = manualAliases.map((v) => toSlug(v)).filter(Boolean);
+
+    // Only use customer-view images for matching; hero slides are fallback-only
+    const candidates = customerImageEntries;
 
     const items = [];
-    const allImages = [...customerImageEntries, ...heroSlides];
+    for (const entry of candidates) {
+        if (!entry?.slug) continue;
+        const entryLower = (entry.label || '').toLowerCase();
 
-    allImages.forEach((entry) => {
-        if (!entry.slug) return;
-        const entryLower = entry.label.toLowerCase();
-        
-        // Prioritize exact matches
-        if (slugCandidates.some(candidate => candidate === entry.slug)) {
+        // Priority 0: exact file slug equals normalizedSlug (strongest)
+        if (entry.slug === normalizedSlug) {
+            items.push({ url: entry.url, alt: entry.alt, label: entry.label, priority: 0 });
+            continue;
+        }
+
+        // Priority 1: matches display name slug (if different from normalized)
+        if (displaySlug && displaySlug !== normalizedSlug && entry.slug === displaySlug) {
             items.push({ url: entry.url, alt: entry.alt, label: entry.label, priority: 1 });
-            return;
+            continue;
         }
-        
-        // Then check for inclusion
-        if (slugCandidates.some((candidate) => candidate && entry.slug.includes(candidate)) || (displayLower && entryLower.includes(displayLower))) {
-            items.push({ url: entry.url, alt: entry.alt, label: entry.label, priority: 2 });
-        }
-    });
 
+        // Priority 2: matches any manual alias exactly
+        if (manualAliasSlugs.length && manualAliasSlugs.includes(entry.slug)) {
+            items.push({ url: entry.url, alt: entry.alt, label: entry.label, priority: 2 });
+            continue;
+        }
+
+        // Priority 3: fuzzy includes, very weak
+        if (
+            (normalizedSlug && entry.slug.includes(normalizedSlug)) ||
+            (displayLower && entryLower.includes(displayLower))
+        ) {
+            items.push({ url: entry.url, alt: entry.alt, label: entry.label, priority: 3 });
+            continue;
+        }
+    }
+
+    // Fallback: if still nothing, show first customer image or a hero slide as last resort
     if (!items.length) {
         const fallback = customerImageEntries[0] ?? heroSlides[0];
         if (fallback) {
-            items.push({ url: fallback.url, alt: fallback.alt, label: fallback.label, priority: 3 });
+            items.push({ url: fallback.url, alt: fallback.alt, label: fallback.label, priority: 4 });
         }
     }
 
@@ -174,7 +288,14 @@ const decoratedSpaces = computed(() => {
         const occupied = Math.max(0, total - available);
         const progress = total > 0 ? Math.round((occupied / total) * 100) : 0;
         const description = type.description || fallbackDescriptions[slug] || 'Flexible workspace ready when you are.';
-        const gallery = buildGallery(slug, type.name ?? 'CO-Z Space');
+
+        // Prefer uploaded photo from admin if available; otherwise build gallery
+        let gallery = [];
+        if (type.photo_url) {
+            gallery = [{ url: type.photo_url, alt: `${type.name} photo`, label: type.name }];
+        } else {
+            gallery = buildGallery(slug, type.name ?? 'CO-Z Space');
+        }
         const firstImage = gallery[0] ?? { url: heroImage, alt: 'CO-Z workspace', label: 'CO-Z Workspace' };
 
         return {
@@ -197,6 +318,55 @@ const decoratedSpaces = computed(() => {
 });
 
 // Removed gallery carousel state and controls; booking section now shows a single image per space.
+
+// Equal-height cards across the grid: measure tallest and apply as min-height to all
+const cardsContainer = ref(null);
+const cardMinHeight = ref(null);
+const cardTopMinHeight = ref(null); // keep title/description/discount block equal height
+let cardsResizeObserver;
+
+const recomputeCardHeights = async () => {
+    await nextTick();
+    // Clear previous minHeight to get natural height
+    cardMinHeight.value = null;
+    cardTopMinHeight.value = null;
+    await nextTick();
+    const root = cardsContainer.value;
+    if (!root) return;
+    const nodes = root.querySelectorAll('[data-space-card]');
+    const topNodes = root.querySelectorAll('[data-card-top]');
+    let max = 0;
+    let topMax = 0;
+    nodes.forEach((el) => {
+        if (!(el instanceof HTMLElement)) return;
+        el.style.minHeight = '';
+        const h = el.getBoundingClientRect().height;
+        if (h > max) max = h;
+    });
+    topNodes.forEach((el) => {
+        if (!(el instanceof HTMLElement)) return;
+        el.style.minHeight = '';
+        const h = el.getBoundingClientRect().height;
+        if (h > topMax) topMax = h;
+    });
+    if (max > 0) cardMinHeight.value = Math.ceil(max);
+    if (topMax > 0) cardTopMinHeight.value = Math.ceil(topMax);
+};
+
+// Keep card heights synchronized when content/image sizes change
+const attachCardsResizeObserver = () => {
+    if (typeof ResizeObserver === 'undefined') return;
+    if (cardsResizeObserver) {
+        try { cardsResizeObserver.disconnect(); } catch {}
+    }
+    const root = cardsContainer.value;
+    if (!root) return;
+    cardsResizeObserver = new ResizeObserver(() => {
+        requestAnimationFrame(() => recomputeCardHeights());
+    });
+    cardsResizeObserver.observe(root);
+    root.querySelectorAll('[data-space-card]').forEach((el) => cardsResizeObserver.observe(el));
+};
 
 const availabilitySummary = computed(() => {
     if (!decoratedSpaces.value.length) {
@@ -222,53 +392,223 @@ const availabilitySummary = computed(() => {
     };
 });
 
-const openCards = ref({});
-
-watchEffect(() => {
-    if (!decoratedSpaces.value.length) return;
-    const first = decoratedSpaces.value[0];
-    if (first && openCards.value[first.slug] === undefined) {
-        openCards.value[first.slug] = true;
-    }
-});
-
-const toggleCard = (slug) => {
-    openCards.value[slug] = !openCards.value[slug];
-};
-
-const isCardOpen = (slug) => {
-    return !!openCards.value[slug];
-};
-
 // Booking selection and availability gating
 const bookingDate = ref(''); // YYYY-MM-DD
 const bookingStart = ref(''); // HH:MM (24h)
 const bookingHours = ref(1); // duration in hours
 const bookingPax = ref(1);
 const showAvailability = ref(false);
+const isAuthenticated = computed(() => Boolean(props.auth?.user));
+const showAuthPrompt = ref(false);
+const googleAuthUrl = computed(() => route('auth.google.redirect', { intent: 'customer' }));
+const loginUrl = computed(() => route('login'));
+const registerUrl = computed(() => route('register'));
+
+const handleSignOut = () => {
+    try {
+        router.post(route('logout'));
+    } catch (e) {
+        // no-op; Inertia will handle navigation
+    }
+};
+
+const handleViewReservationClick = (event) => {
+    if (event?.preventDefault) event.preventDefault();
+    if (!isAuthenticated.value) {
+        showAuthPrompt.value = true;
+        return;
+    }
+    if (typeof window !== 'undefined') {
+        const target = document.getElementById('reservations');
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+};
+
+watch(isAuthenticated, (value) => {
+    if (value) {
+        showAuthPrompt.value = false;
+    }
+});
+
+const minBookingDate = computed(() => currentManilaTime.value.date);
+const minBookingTime = computed(() =>
+    bookingDate.value === currentManilaTime.value.date ? currentManilaTime.value.time : '00:00'
+);
+
+const enforceFutureBookingSelection = ([nextDate, nextStart, minDate, minTime]) => {
+    if (!nextDate) {
+        return;
+    }
+
+    if (nextDate < minDate) {
+        bookingDate.value = minDate;
+        nextDate = minDate;
+    }
+
+    if (nextDate !== minDate) {
+        return;
+    }
+
+    if (!nextStart || nextStart < minTime) {
+        bookingStart.value = minTime;
+    }
+};
+
+watch(
+    [bookingDate, bookingStart, () => currentManilaTime.value.date, () => currentManilaTime.value.time],
+    enforceFutureBookingSelection,
+    { immediate: true }
+);
+
+const availabilityData = ref(null);
+const isCheckingAvailability = ref(false);
+
+// Recompute card heights when availability toggles, spaces change, or images likely finish layout
+watch([showAvailability, availabilityData], () => {
+    recomputeCardHeights();
+    attachCardsResizeObserver();
+});
+
+watch(() => props.spaceTypes, () => {
+    recomputeCardHeights();
+    attachCardsResizeObserver();
+}, { deep: true });
+
+// Also after hero slide changes, in case layout shifts
+watch(() => activeHeroSlide.value, () => {
+    recomputeCardHeights();
+});
 
 const canCheckAvailability = computed(() => {
     const hrs = Number(bookingHours.value || 0);
-    return Boolean(bookingDate.value && bookingStart.value && hrs > 0);
+    const pax = Number(bookingPax.value || 0);
+    return Boolean(bookingDate.value && bookingStart.value && hrs > 0 && pax > 0);
 });
 
-const checkAvailability = () => {
+const checkAvailability = async () => {
     if (!canCheckAvailability.value) return;
-    // In this mock flow, availability is based on current slots;
-    // we simply reveal the status after the user selects date & time.
-    showAvailability.value = true;
+    
+    isCheckingAvailability.value = true;
+    availabilityData.value = null;
+    
+    try {
+        const startDateTime = `${bookingDate.value}T${bookingStart.value}:00`;
+        
+        // Use axios which is included with Laravel and handles CSRF automatically
+        const { default: axios } = await import('axios');
+        
+        const response = await axios.post('/public/check-availability', {
+            start_time: startDateTime,
+            hours: Number(bookingHours.value || 1),
+            pax: Number(bookingPax.value || 1),
+        });
+        
+        if (response.data && response.data.availability) {
+            availabilityData.value = response.data.availability;
+            showAvailability.value = true;
+        }
+    } catch (error) {
+        console.error('Error checking availability:', error);
+        if (error.response?.data?.errors) {
+            const firstError = Object.values(error.response.data.errors)[0];
+            alert(Array.isArray(firstError) ? firstError[0] : firstError);
+        } else if (error.response?.data?.message) {
+            alert(error.response.data.message);
+        } else {
+            alert('Failed to check availability. Please try again.');
+        }
+    } finally {
+        isCheckingAvailability.value = false;
+    }
 };
+
+// Update decorated spaces to reflect real-time availability
+const decoratedSpacesWithAvailability = computed(() => {
+    const requiredPax = Number(bookingPax.value || 1);
+
+    return decoratedSpaces.value.map(space => {
+        if (!availabilityData.value) {
+            return space;
+        }
+        
+        const availInfo = availabilityData.value.find(a => a.id === space.id);
+        if (!availInfo) {
+            return space;
+        }
+        
+        const availableCount = Math.max(0, Number(availInfo.available_capacity ?? space.availableCount ?? 0));
+        const totalCount = Number(space.totalCount ?? space.total_slots ?? 0);
+        const occupiedCount = totalCount > 0 ? Math.max(0, totalCount - availableCount) : 0;
+        const progress = totalCount > 0 ? Math.round((occupiedCount / totalCount) * 100) : 0;
+        const canAccommodate = availInfo.can_accommodate ?? availInfo.is_available ?? false;
+        const hasSomeCapacity = availableCount > 0;
+        const statusText = canAccommodate
+            ? 'Available'
+            : hasSomeCapacity
+                ? `Need ${requiredPax}, only ${availableCount} slot${availableCount === 1 ? '' : 's'} free`
+                : 'Fully Booked';
+
+        return {
+            ...space,
+            availableCount,
+            isAvailable: canAccommodate,
+            statusText,
+            statusClass: canAccommodate ? 'text-green-600' : 'text-red-500',
+            availableLabel: totalCount > 0 
+                ? `(${availableCount}/${totalCount}) Available` 
+                : 'Call for availability',
+            progress,
+            canAccommodate,
+        };
+    });
+});
 
 // Mock payment modal state and handlers
 const showPaymentModal = ref(false);
 const selectedSpace = ref(null);
 const selectedPayment = ref(null); // 'gcash' | 'maya' | 'cash'
 const paymentStatus = ref(null); // { type: 'success' | 'hold' }
+const paymentStep = ref(1); // 1: customer details, 2: payment method, 3: confirmation
+
+// Customer details form
+const customerDetails = ref({
+    name: '',
+    email: '',
+    phone: '',
+    company_name: '',
+});
+
+const formErrors = ref({});
 
 const openPayment = (space) => {
+    if (!isAuthenticated.value) {
+        showAuthPrompt.value = true;
+        return;
+    }
+    
+    // Must check availability first
+    if (!showAvailability.value) {
+        alert('Please check availability first by selecting a date, time, hours, and number of people, then clicking "Check Availability".');
+        return;
+    }
+    
+    // Check if space is available
+    if (!space.isAvailable) {
+        alert('This space is fully booked for the selected time. Please choose a different time or space.');
+        return;
+    }
+    
     selectedSpace.value = space;
     selectedPayment.value = null;
     paymentStatus.value = null;
+    paymentStep.value = 1;
+    customerDetails.value = {
+        name: props.auth.user?.name || '',
+        email: props.auth.user?.email || '',
+        phone: '',
+        company_name: props.auth.user?.company_name || '',
+    };
+    formErrors.value = {};
     showPaymentModal.value = true;
 };
 
@@ -276,39 +616,232 @@ const closePayment = () => {
     showPaymentModal.value = false;
 };
 
+const closeAuthPrompt = () => {
+    showAuthPrompt.value = false;
+};
+
+const handleReserveClick = (event) => {
+    if (event?.preventDefault) {
+        event.preventDefault();
+    }
+
+    if (!isAuthenticated.value) {
+        showAuthPrompt.value = true;
+        return;
+    }
+
+    if (typeof window !== 'undefined') {
+        const target = document.getElementById('spaces');
+        if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+};
+
 const selectPayment = (method) => {
     selectedPayment.value = method;
     paymentStatus.value = null;
 };
 
+const validateCustomerDetails = () => {
+    formErrors.value = {};
+    
+    if (!customerDetails.value.name.trim()) {
+        formErrors.value.name = 'Name is required';
+    }
+    
+    if (!customerDetails.value.email.trim()) {
+        formErrors.value.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerDetails.value.email)) {
+        formErrors.value.email = 'Invalid email format';
+    }
+    
+    if (!customerDetails.value.phone.trim()) {
+        formErrors.value.phone = 'Phone number is required';
+    } else if (!/^(\+63\d{10}|09\d{9})$/.test(customerDetails.value.phone.trim())) {
+        formErrors.value.phone = 'Invalid phone number. Use +639XXXXXXXXX or 09XXXXXXXXX';
+    }
+    
+    return Object.keys(formErrors.value).length === 0;
+};
+
+const proceedToPayment = () => {
+    if (validateCustomerDetails()) {
+        paymentStep.value = 2;
+    }
+};
+
+const backToDetails = () => {
+    paymentStep.value = 1;
+};
+
 const confirmPayment = () => {
     if (!selectedPayment.value || !selectedSpace.value) return;
 
-    // If user is not authenticated, redirect to login before processing payment.
-    if (!props.auth.user) {
-        router.visit(route('login', { redirect: route('customer.view') }));
+    // Build start_time from booking date and time if available
+    let startTime = null;
+    if (bookingDate.value && bookingStart.value) {
+        startTime = `${bookingDate.value}T${bookingStart.value}:00`;
+    }
+
+    // For GCash/Maya, show mock payment success immediately
+    if (selectedPayment.value === 'gcash' || selectedPayment.value === 'maya') {
+        paymentStatus.value = { type: 'success' };
+        paymentStep.value = 3;
+        
+        // Still send to backend for record keeping
+        const payload = {
+            space_type_id: selectedSpace.value.id,
+            payment_method: selectedPayment.value,
+            hours: Number(bookingHours.value || 1),
+            pax: Number(bookingPax.value || 1),
+            customer_name: customerDetails.value.name,
+            customer_email: customerDetails.value.email,
+            customer_phone: customerDetails.value.phone,
+            customer_company_name: customerDetails.value.company_name,
+        };
+        
+        if (startTime) {
+            payload.start_time = startTime;
+        }
+        
+        router.post(route('public.reservations.store'), payload, {
+            preserveScroll: true,
+            preserveState: true,
+            onError: (errors) => {
+                // Show error if booking fails
+                paymentStatus.value = null;
+                paymentStep.value = 1;
+                if (errors.space_type_id) {
+                    alert(errors.space_type_id);
+                } else {
+                    alert('Failed to create reservation. Please try again.');
+                }
+            },
+        });
         return;
     }
 
+    // For cash payment
     const payload = {
         space_type_id: selectedSpace.value.id,
         payment_method: selectedPayment.value,
-        hours: selectedPayment.value === 'cash' ? 1 : Number(bookingHours.value || 1),
+        hours: 1, // Cash always reserves 1 hour
         pax: Number(bookingPax.value || 1),
+        customer_name: customerDetails.value.name,
+        customer_email: customerDetails.value.email,
+        customer_phone: customerDetails.value.phone,
+        customer_company_name: customerDetails.value.company_name,
     };
+    
+    if (startTime) {
+        payload.start_time = startTime;
+    }
 
-    // Persist to backend; stay on page and reflect status on success
     router.post(route('public.reservations.store'), payload, {
         preserveScroll: true,
         onSuccess: () => {
-            paymentStatus.value = { type: selectedPayment.value === 'cash' ? 'hold' : 'success' };
+            paymentStatus.value = { type: 'hold' };
+            paymentStep.value = 3;
         },
-        onError: () => {
-            // keep UI responsive even if validation fails
-            paymentStatus.value = { type: selectedPayment.value === 'cash' ? 'hold' : 'success' };
+        onError: (errors) => {
+            paymentStatus.value = { type: 'hold' };
+            paymentStep.value = 3;
+            if (errors.space_type_id) {
+                alert(errors.space_type_id);
+            }
         }
     });
 };
+
+const calculatePricing = (hours, spaceOverride = null) => {
+    const space = spaceOverride ?? selectedSpace.value;
+
+    if (!space) {
+        return {
+            hourlyRate: 0,
+            hours: Number(hours) || 0,
+            discountHours: 0,
+            discountPercentage: 0,
+            baseCost: 0,
+            discountAmount: 0,
+            finalCost: 0,
+            qualifies: false,
+        };
+    }
+
+    const rawHours = Number(hours) || 0;
+    const normalizedHours = rawHours > 0 ? rawHours : 0;
+    const hourlyRate = Number(
+        space.price_per_hour ?? space.pricePerHour ?? space.hourly_rate ?? 0
+    );
+    const discountHours = Number(space.discount_hours ?? space.discountHours ?? 0);
+    const discountPercentage = Number(
+        space.discount_percentage ?? space.discountPercentage ?? 0
+    );
+
+    const baseCost = normalizedHours * hourlyRate;
+    const qualifies =
+        discountHours > 0 &&
+        discountPercentage > 0 &&
+        normalizedHours >= discountHours;
+    const discountAmount = qualifies ? baseCost * (discountPercentage / 100) : 0;
+    const finalCost = Math.max(baseCost - discountAmount, 0);
+
+    return {
+        hourlyRate,
+        hours: normalizedHours,
+        discountHours,
+        discountPercentage,
+        baseCost,
+        discountAmount,
+        finalCost,
+        qualifies,
+    };
+};
+
+const estimatedPricing = computed(() => {
+    const hours = Math.max(1, Number(bookingHours.value || 1));
+    return calculatePricing(hours);
+});
+
+const finalizedPricing = computed(() => {
+    const hours = selectedPayment.value === 'cash'
+        ? 1
+        : Math.max(1, Number(bookingHours.value || 1));
+
+    return calculatePricing(hours);
+});
+
+// Calendar and reservation management
+const activeTab = ref(null);
+const selectedReservation = ref(null);
+const showReservationDetail = ref(false);
+
+const reservationsBySpaceType = computed(() => {
+    const grouped = {};
+    props.reservations.forEach(res => {
+        const typeId = res.space_type_id;
+        if (!grouped[typeId]) grouped[typeId] = [];
+        grouped[typeId].push(res);
+    });
+    return grouped;
+});
+
+const openReservationDetail = (reservation) => {
+    selectedReservation.value = reservation;
+    showReservationDetail.value = true;
+};
+
+const closeReservationDetail = () => {
+    showReservationDetail.value = false;
+    selectedReservation.value = null;
+};
+
+const refreshReservations = () => {
+    router.reload({ only: ['reservations'] });
+};
+
 </script>
 
 <template>
@@ -324,18 +857,28 @@ const confirmPayment = () => {
                     </div>
                 </div>
                 <nav class="flex items-center gap-3">
-                    <a href="#spaces" class="inline-flex items-center gap-2 bg-[#2f4686] hover:bg-[#3956a3] text-white font-semibold text-xs sm:text-sm tracking-wide uppercase px-4 py-2 rounded-full transition-colors">
+                    <a href="#reservations" @click.prevent="handleViewReservationClick" class="inline-flex items-center gap-2 bg-[#2f4686] hover:bg-[#3956a3] text-white font-semibold text-xs sm:text-sm tracking-wide uppercase px-4 py-2 rounded-full transition-colors">
                         View Reservation
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                         </svg>
                     </a>
-                    <a href="#spaces" class="hidden sm:inline-flex items-center gap-2 text-xs sm:text-sm font-semibold uppercase tracking-wide text-[#2f4686] hover:text-[#3956a3]">
-                        Book Online
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                        </svg>
-                    </a>
+                    <button
+                        v-if="!isAuthenticated"
+                        type="button"
+                        @click="showAuthPrompt = true"
+                        class="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold uppercase tracking-wide text-[#2f4686] hover:text-[#3956a3]"
+                    >
+                        Sign in
+                    </button>
+                    <button
+                        v-else
+                        type="button"
+                        @click="handleSignOut"
+                        class="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold uppercase tracking-wide text-[#2f4686] hover:text-[#3956a3]"
+                    >
+                        Sign out
+                    </button>
                 </nav>
             </div>
         </header>
@@ -384,20 +927,15 @@ const confirmPayment = () => {
                                                 Unlimited coffee & fast Wi‑Fi
                                             </span>
                                         </div>
-                                        <div class="flex flex-col sm:flex-row gap-3">
-                                            <a href="#spaces" class="inline-flex items-center justify-center gap-3 bg-[#ff6b35] hover:bg-[#ff824f] text-white font-semibold text-sm md:text-base tracking-wide uppercase px-6 py-3 rounded-full transition-colors">
+                                        <div class="flex">
+                                            <a
+                                                href="#spaces"
+                                                @click.prevent="handleReserveClick"
+                                                class="inline-flex items-center justify-center gap-3 bg-[#ff6b35] hover:bg-[#ff824f] text-white font-semibold text-sm md:text-base tracking-wide uppercase px-6 py-3 rounded-full transition-colors"
+                                            >
                                                 Reserve Now
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                                                </svg>
-                                            </a>
-                                            <a href="#location" class="inline-flex items-center justify-center gap-3 border border-white/40 text-white hover:bg-white/15 font-semibold text-sm md:text-base tracking-wide uppercase px-6 py-3 rounded-full transition-colors">
-                                                Explore Spaces
-                                            </a>
-                                            <a href="#spaces" class="inline-flex items-center justify-center gap-3 bg-white text-[#1c2f59] hover:bg-[#ebefff] font-semibold text-sm md:text-base tracking-wide uppercase px-6 py-3 rounded-full transition-colors">
-                                                Book Online
-                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
                                                 </svg>
                                             </a>
                                         </div>
@@ -488,11 +1026,21 @@ const confirmPayment = () => {
                                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                     <div class="flex flex-col gap-1">
                                         <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Date</label>
-                                        <input type="date" v-model="bookingDate" class="h-10 rounded-lg border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2f4686]/30" />
+                                        <input
+                                            type="date"
+                                            v-model="bookingDate"
+                                            :min="minBookingDate"
+                                            class="h-10 rounded-lg border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2f4686]/30"
+                                        />
                                     </div>
                                     <div class="flex flex-col gap-1">
                                         <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Start Time</label>
-                                        <input type="time" v-model="bookingStart" class="h-10 rounded-lg border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2f4686]/30" />
+                                        <input
+                                            type="time"
+                                            v-model="bookingStart"
+                                            :min="minBookingTime"
+                                            class="h-10 rounded-lg border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#2f4686]/30"
+                                        />
                                     </div>
                                     <div class="flex flex-col gap-1">
                                         <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Hours</label>
@@ -507,102 +1055,183 @@ const confirmPayment = () => {
                                     <p>
                                         Availability is hidden until you enter date and time. After checking, unavailable spaces will be greyed out.
                                     </p>
-                                    <button type="button" @click="checkAvailability" :disabled="!canCheckAvailability" class="inline-flex items-center justify-center gap-2 bg-[#2f4686] hover:bg-[#3956a3] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-xs sm:text-sm uppercase tracking-wide px-4 py-2 rounded-full">
-                                        Check Availability
+                                    <button type="button" @click="checkAvailability" :disabled="!canCheckAvailability || isCheckingAvailability" class="inline-flex items-center justify-center gap-2 bg-[#2f4686] hover:bg-[#3956a3] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-xs sm:text-sm uppercase tracking-wide px-4 py-2 rounded-full">
+                                        <svg v-if="isCheckingAvailability" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        <span>{{ isCheckingAvailability ? 'Checking...' : 'Check Availability' }}</span>
                                     </button>
                                 </div>
                             </div>
 
-                            <div v-if="!decoratedSpaces.length" class="bg-white rounded-2xl shadow p-6 text-center text-slate-500">
+                            <div v-if="!decoratedSpacesWithAvailability.length" class="bg-white rounded-2xl shadow p-6 text-center text-slate-500">
                                 Spaces will appear here once configured in the admin portal.
                             </div>
 
-                            <div v-else class="space-y-4">
+                            <div v-else ref="cardsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
                                 <article
-                                    v-for="space in decoratedSpaces"
+                                    v-for="space in decoratedSpacesWithAvailability"
                                     :key="space.id"
-                                    class="bg-white rounded-2xl shadow-md overflow-hidden transition-transform hover:-translate-y-1"
+                                    class="bg-white rounded-2xl shadow-lg overflow-hidden transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl flex flex-col h-full"
+                                    :class="{ 'grayscale opacity-70': showAvailability && !space.isAvailable }"
+                                    data-space-card
+                                    :style="cardMinHeight ? { minHeight: cardMinHeight + 'px' } : undefined"
                                 >
-                                    <header class="flex flex-col md:flex-row md:items-center gap-4 px-6 py-5">
-                                        <div class="flex-1">
-                                            <div class="flex items-center gap-2">
-                                                <h3 class="text-xl font-semibold text-[#2f4686] leading-tight">{{ space.name }}</h3>
-                                                <span v-if="showAvailability" :class="['text-xs font-semibold uppercase tracking-wide', space.statusClass]">{{ space.statusText }}</span>
-                                            </div>
-                                            <p class="text-sm text-slate-600 mt-1" :class="{ 'line-clamp-2': !isCardOpen(space.slug) }">{{ space.description }}</p>
+                                    <!-- Image at the top -->
+                                    <div class="relative h-56 overflow-hidden">
+                                        <img
+                                            v-if="space.image"
+                                            :src="space.image"
+                                            :alt="space.imageAlt || `${space.name} preview`"
+                                            class="absolute inset-0 w-full h-full object-cover transition-transform duration-300 hover:scale-110"
+                                            loading="lazy"
+                                            sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
+                                            @load="recomputeCardHeights"
+                                        />
+                                        <div v-else class="absolute inset-0 flex items-center justify-center bg-slate-200 text-slate-500 text-sm">
+                                            Image coming soon
                                         </div>
-                                        <div class="flex items-center gap-4 md:gap-6">
-                                            <div class="text-right">
-                                                <div class="text-lg md:text-xl font-semibold text-[#2f4686]">{{ space.priceLabel }}</div>
-                                                <div class="text-xs uppercase tracking-wide text-slate-500">per person per hour</div>
-                                                <div v-if="showAvailability" :class="['text-xs md:text-sm font-semibold mt-1', space.statusClass]">{{ space.availableLabel }}</div>
+                                        <!-- Status badge overlay -->
+                                        <div v-if="showAvailability" class="absolute top-3 right-3">
+                                            <span :class="['inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide shadow-lg backdrop-blur-sm', space.isAvailable ? 'bg-green-500/90 text-white' : 'bg-red-500/90 text-white']">
+                                                <span class="h-2 w-2 rounded-full" :class="space.isAvailable ? 'bg-white' : 'bg-white/80'" />
+                                                {{ space.statusText }}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Content -->
+                                    <div class="flex flex-col flex-1 p-5 space-y-4">
+                                        <div data-card-top :style="cardTopMinHeight ? { minHeight: cardTopMinHeight + 'px' } : undefined">
+                                            <h3 class="text-xl font-bold text-[#2f4686] leading-tight mb-2 line-clamp-2">{{ space.name }}</h3>
+                                            <p class="text-sm text-slate-600 leading-relaxed line-clamp-3">{{ space.description }}</p>
+                                            <div
+                                                v-if="space.discount_percentage && space.discount_hours"
+                                                class="mt-3 inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                                <span>Save {{ space.discount_percentage }}% when you book {{ space.discount_hours }}+ hrs</span>
                                             </div>
+                                        </div>
+
+                                        <!-- Price -->
+                                        <div class="border-t border-slate-200 pt-3">
+                                            <div class="flex items-baseline justify-between">
+                                                <div>
+                                                    <div class="text-2xl font-bold text-[#2f4686]">{{ space.priceLabel }}</div>
+                                                    <div class="text-xs uppercase tracking-wide text-slate-500">per person per hour</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Availability info -->
+                                        <div v-if="showAvailability" class="space-y-2">
+                                            <div class="flex items-center justify-between text-xs text-slate-600">
+                                                <span class="font-semibold">{{ space.availableLabel }}</span>
+                                                <span class="text-slate-500">{{ space.totalCount - space.availableCount }} occupied</span>
+                                            </div>
+                                            <div class="h-2 bg-slate-200 rounded-full overflow-hidden">
+                                                <div class="h-full bg-[#2f4686] transition-all duration-300" :style="{ width: `${space.progress}%` }" />
+                                            </div>
+                                        </div>
+
+                                        <!-- Action button -->
+                                        <div class="pt-2 mt-auto">
                                             <button
                                                 type="button"
-                                                class="h-10 w-10 flex items-center justify-center rounded-full border border-slate-200 text-[#2f4686] hover:bg-slate-100 transition"
-                                                @click="toggleCard(space.slug)"
-                                                :aria-expanded="isCardOpen(space.slug)"
+                                                class="w-full inline-flex items-center justify-center gap-2 text-white font-bold text-sm uppercase tracking-wide px-5 py-3 rounded-xl transition-colors shadow-md"
+                                                :class="!showAvailability || !space.isAvailable 
+                                                    ? 'bg-gray-400 cursor-not-allowed opacity-60' 
+                                                    : 'bg-[#2f4686] hover:bg-[#3956a3] hover:shadow-lg'"
+                                                :disabled="!showAvailability || !space.isAvailable"
+                                                @click="openPayment(space)"
                                             >
-                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-5 w-5 transition-transform" :class="{ 'rotate-180': isCardOpen(space.slug) }">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                                                <span v-if="!showAvailability">Check Availability First</span>
+                                                <span v-else-if="!space.isAvailable">Fully Booked</span>
+                                                <span v-else>Book Now</span>
+                                                <svg v-if="showAvailability && space.isAvailable" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
                                                 </svg>
                                             </button>
                                         </div>
-                                    </header>
-
-                                    <transition enter-active-class="transition duration-200" enter-from-class="opacity-0 -translate-y-1" enter-to-class="opacity-100 translate-y-0" leave-active-class="transition duration-150" leave-from-class="opacity-100" leave-to-class="opacity-0">
-                                        <div v-if="isCardOpen(space.slug)" class="px-6 pb-6">
-                                            <div class="grid gap-5 md:grid-cols-[1.2fr_0.8fr]">
-                                                <div class="space-y-4">
-                                                    <div>
-                                                        <p class="text-sm text-slate-600 leading-relaxed">
-                                                            {{ space.description }}
-                                                        </p>
-                                                    </div>
-                                                    <div v-if="showAvailability" class="space-y-2">
-                                                        <div class="flex items-center justify-between text-xs text-slate-500 uppercase tracking-wide">
-                                                            <span>Occupancy</span>
-                                                            <span>{{ space.totalCount - space.availableCount }} occupied</span>
-                                                        </div>
-                                                        <div class="h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                                                            <div class="h-full bg-[#2f4686]" :style="{ width: `${space.progress}%` }" />
-                                                        </div>
-                                                    </div>
-                                                    <div class="flex flex-col sm:flex-row gap-3 pt-2">
-                                                        <button
-                                                            type="button"
-                                                            class="inline-flex items-center justify-center gap-2 bg-[#2f4686] hover:bg-[#3956a3] text-white font-semibold text-xs sm:text-sm uppercase tracking-wide px-5 py-2 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                                            :disabled="!showAvailability || !space.isAvailable"
-                                                            @click="openPayment(space)"
-                                                        >
-                                                            Proceed to Payment
-                                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                                                <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                                                            </svg>
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                <div class="space-y-3">
-                                                    <div class="relative rounded-2xl overflow-hidden h-48 md:h-full" :class="{ 'grayscale opacity-60': showAvailability && !space.isAvailable }">
-                                                        <img
-                                                            v-if="space.image"
-                                                            :src="space.image"
-                                                            :alt="space.imageAlt || `${space.name} preview`"
-                                                            class="absolute inset-0 w-full h-full object-cover"
-                                                        />
-                                                        <div v-else class="absolute inset-0 flex items-center justify-center bg-slate-200 text-slate-500 text-sm">
-                                                            Image coming soon
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </transition>
+                                    </div>
                                 </article>
                             </div>
                         </section>
                     </div>
                 </main>
+
+        <section v-if="auth.user && reservations.length > 0" id="reservations" class="py-12 bg-gradient-to-b from-white to-gray-50">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold text-gray-900 mb-2">Your Reservations</h2>
+                    <p class="text-gray-600">View and manage your space bookings with real-time status updates</p>
+                </div>
+
+                <!-- Tabs for each space type -->
+                <div class="mb-6">
+                    <div class="border-b border-gray-200">
+                        <nav class="-mb-px flex space-x-4 overflow-x-auto" aria-label="Tabs">
+                            <button
+                                v-for="spaceType in spaceTypes.filter(st => reservationsBySpaceType[st.id]?.length > 0)"
+                                :key="spaceType.id"
+                                @click="activeTab = spaceType.id"
+                                :class="[
+                                    activeTab === spaceType.id || (activeTab === null && spaceType === spaceTypes.find(st => reservationsBySpaceType[st.id]?.length > 0))
+                                        ? 'border-[#2f4686] text-[#2f4686]'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+                                    'whitespace-nowrap py-4 px-6 border-b-2 font-semibold text-sm transition-colors'
+                                ]"
+                            >
+                                {{ spaceType.name }}
+                                <span class="ml-2 px-2 py-0.5 rounded-full text-xs font-bold"
+                                      :class="activeTab === spaceType.id || (activeTab === null && spaceType === spaceTypes.find(st => reservationsBySpaceType[st.id]?.length > 0))
+                                          ? 'bg-[#2f4686] text-white'
+                                          : 'bg-gray-200 text-gray-600'">
+                                    {{ reservationsBySpaceType[spaceType.id]?.length || 0 }}
+                                </span>
+                            </button>
+                        </nav>
+                    </div>
+                </div>
+
+                <!-- Calendar for each space type -->
+                <div v-for="spaceType in spaceTypes" :key="spaceType.id">
+                    <div
+                        v-show="activeTab === spaceType.id || (activeTab === null && spaceType === spaceTypes.find(st => reservationsBySpaceType[st.id]?.length > 0))"
+                        v-if="reservationsBySpaceType[spaceType.id]?.length > 0"
+                    >
+                        <SpaceCalendar
+                            :space-type="spaceType"
+                            :reservations="reservationsBySpaceType[spaceType.id]"
+                            @open-detail="openReservationDetail"
+                            @refresh="refreshReservations"
+                        />
+                    </div>
+                </div>
+
+                <!-- Empty state -->
+                <div v-if="!Object.keys(reservationsBySpaceType).length" class="text-center py-12 bg-white rounded-2xl shadow">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto h-16 w-16 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <h3 class="mt-4 text-lg font-semibold text-gray-900">No reservations yet</h3>
+                    <p class="mt-2 text-gray-600">Start by booking a space above</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Reservation Detail Modal -->
+        <ReservationDetailModal
+            v-if="selectedReservation"
+            :reservation="selectedReservation"
+            :show="showReservationDetail"
+            @close="closeReservationDetail"
+            @updated="refreshReservations"
+        />
 
         <footer class="mt-12 bg-white border-t border-slate-200">
             <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-sm text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-3">
@@ -614,13 +1243,15 @@ const confirmPayment = () => {
             </div>
         </footer>
         
-        <!-- Mock Payment Modal -->
+        <!-- Payment Modal with Customer Details -->
         <div v-if="showPaymentModal" class="fixed inset-0 z-50">
             <div class="absolute inset-0 bg-black/50" @click="closePayment" />
-            <div class="relative z-10 max-w-lg w-11/12 sm:w-full mx-auto mt-24 bg-white rounded-2xl shadow-xl overflow-hidden">
+            <div class="relative z-10 max-w-lg w-11/12 sm:w-full mx-auto mt-16 mb-8 bg-white rounded-2xl shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
                 <div class="flex items-center justify-between px-5 py-4 border-b">
                     <div>
-                        <p class="text-xs uppercase tracking-wide text-slate-500">Payment</p>
+                        <p class="text-xs uppercase tracking-wide text-slate-500">
+                            Step {{ paymentStep }} of 3
+                        </p>
                         <h3 class="text-lg font-semibold text-[#2f4686]">{{ selectedSpace?.name || 'Reservation' }}</h3>
                     </div>
                     <button class="h-9 w-9 inline-flex items-center justify-center rounded-full hover:bg-slate-100" @click="closePayment" aria-label="Close">
@@ -630,69 +1261,290 @@ const confirmPayment = () => {
                     </button>
                 </div>
 
-                <div class="p-5 space-y-4">
-                    <div v-if="!paymentStatus" class="space-y-4">
-                        <p class="text-sm text-slate-600">Choose your payment method. Cash holds your reservation for 1 hour and is confirmed onsite.</p>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <button type="button" @click="selectPayment('gcash')" :class="['h-24 rounded-xl border flex items-center justify-center gap-3 transition', selectedPayment === 'gcash' ? 'border-[#2f4686] ring-2 ring-[#2f4686]/30' : 'border-slate-200 hover:border-slate-300']">
-                                <img :src="gcashLogo" alt="GCash" class="h-8 w-auto" />
-                                <span class="sr-only">GCash</span>
-                            </button>
-                            <button type="button" @click="selectPayment('maya')" :class="['h-24 rounded-xl border flex items-center justify-center gap-3 transition', selectedPayment === 'maya' ? 'border-[#2f4686] ring-2 ring-[#2f4686]/30' : 'border-slate-200 hover:border-slate-300']">
-                                <img :src="mayaLogo" alt="Maya" class="h-8 w-auto" />
-                                <span class="sr-only">Maya</span>
-                            </button>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <div class="h-px flex-1 bg-slate-200" />
-                            <span class="text-[11px] uppercase tracking-wider text-slate-400">or</span>
-                            <div class="h-px flex-1 bg-slate-200" />
-                        </div>
-                        <button type="button" @click="selectPayment('cash')" :class="['w-full h-14 rounded-xl border flex items-center justify-between px-4 transition', selectedPayment === 'cash' ? 'border-[#2f4686] ring-2 ring-[#2f4686]/30' : 'border-slate-200 hover:border-slate-300']">
-                            <div class="flex flex-col text-left">
-                                <span class="text-sm font-semibold text-[#2f4686]">Cash (Onsite)</span>
-                                <span class="text-xs text-slate-500">Secures 1 hour; confirm and pay at the counter</span>
+                <div class="overflow-y-auto flex-1">
+                    <div class="p-5 space-y-4">
+                        <!-- Step 1: Customer Details -->
+                        <div v-if="paymentStep === 1" class="space-y-4">
+                            <div>
+                                <p class="text-sm font-semibold text-[#2f4686] mb-1">Enter Your Details</p>
+                                <p class="text-xs text-slate-500">We need your information to process the reservation.</p>
                             </div>
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-                            </svg>
-                        </button>
-                        <div class="pt-1">
-                            <button type="button" class="w-full inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm px-5 py-3 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed" :disabled="!selectedPayment" @click="confirmPayment">
-                                <span v-if="selectedPayment === 'cash'">Reserve 1 Hour</span>
-                                <span v-else>Pay Now</span>
+
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-wide text-slate-600 mb-1.5">
+                                        Full Name <span class="text-red-500">*</span>
+                                    </label>
+                                    <input 
+                                        v-model="customerDetails.name" 
+                                        type="text" 
+                                        placeholder="Juan Dela Cruz"
+                                        class="w-full h-11 rounded-lg border px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2f4686]/30 transition"
+                                        :class="formErrors.name ? 'border-red-500' : 'border-slate-300'"
+                                    />
+                                    <p v-if="formErrors.name" class="text-xs text-red-500 mt-1">{{ formErrors.name }}</p>
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-wide text-slate-600 mb-1.5">
+                                        Email Address <span class="text-red-500">*</span>
+                                    </label>
+                                    <input 
+                                        v-model="customerDetails.email" 
+                                        type="email" 
+                                        placeholder="juan@example.com"
+                                        class="w-full h-11 rounded-lg border px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2f4686]/30 transition"
+                                        :class="formErrors.email ? 'border-red-500' : 'border-slate-300'"
+                                    />
+                                    <p v-if="formErrors.email" class="text-xs text-red-500 mt-1">{{ formErrors.email }}</p>
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-wide text-slate-600 mb-1.5">
+                                        Phone Number <span class="text-red-500">*</span>
+                                    </label>
+                                    <input 
+                                        v-model="customerDetails.phone" 
+                                        type="tel" 
+                                        placeholder="09123456789"
+                                        class="w-full h-11 rounded-lg border px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2f4686]/30 transition"
+                                        :class="formErrors.phone ? 'border-red-500' : 'border-slate-300'"
+                                    />
+                                    <p v-if="formErrors.phone" class="text-xs text-red-500 mt-1">{{ formErrors.phone }}</p>
+                                    <p class="text-xs text-slate-500 mt-1">Format: 09XXXXXXXXX or +639XXXXXXXXX</p>
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-wide text-slate-600 mb-1.5">
+                                        Company Name (Optional)
+                                    </label>
+                                    <input 
+                                        v-model="customerDetails.company_name" 
+                                        type="text" 
+                                        placeholder="e.g., Mega Corporation"
+                                        class="w-full h-11 rounded-lg border border-slate-300 px-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#2f4686]/30 transition"
+                                    />
+                                </div>
+                            </div>
+
+                            <div class="bg-slate-50 rounded-xl p-4 space-y-2 text-xs">
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Space:</span>
+                                    <span class="font-semibold text-[#2f4686]">{{ selectedSpace?.name }}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Date:</span>
+                                    <span class="font-semibold text-[#2f4686]">{{ bookingDate || 'Not selected' }}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Start Time:</span>
+                                    <span class="font-semibold text-[#2f4686]">{{ bookingStart || 'Not selected' }}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Duration:</span>
+                                    <span class="font-semibold text-[#2f4686]">{{ bookingHours }} hour(s)</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Pax:</span>
+                                    <span class="font-semibold text-[#2f4686]">{{ bookingPax }} person(s)</span>
+                                </div>
+                                <div class="h-px bg-slate-200 my-1"></div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Base Cost</span>
+                                    <span class="font-semibold text-[#2f4686]">{{ formatCurrency(estimatedPricing.baseCost || 0) }}</span>
+                                </div>
+                                <div
+                                    v-if="estimatedPricing.qualifies"
+                                    class="flex justify-between text-emerald-600 font-semibold"
+                                >
+                                    <span>Discount ({{ estimatedPricing.discountPercentage }}% for {{ estimatedPricing.discountHours }}+ hrs)</span>
+                                    <span>-{{ formatCurrency(estimatedPricing.discountAmount || 0) }}</span>
+                                </div>
+                                <div
+                                    v-else-if="estimatedPricing.discountPercentage && estimatedPricing.discountHours"
+                                    class="text-[11px] text-slate-500"
+                                >
+                                    Book {{ estimatedPricing.discountHours }}+ hours to save {{ estimatedPricing.discountPercentage }}%.
+                                </div>
+                                <div class="flex justify-between text-sm font-bold text-[#2f4686]">
+                                    <span>Estimated Total</span>
+                                    <span>{{ formatCurrency(estimatedPricing.finalCost || 0) }}</span>
+                                </div>
+                            </div>
+
+                            <button 
+                                type="button" 
+                                class="w-full inline-flex items-center justify-center gap-2 bg-[#2f4686] hover:bg-[#3956a3] text-white font-semibold text-sm px-5 py-3 rounded-xl transition-colors"
+                                @click="proceedToPayment"
+                            >
+                                Continue to Payment
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                                 </svg>
                             </button>
                         </div>
-                    </div>
 
-                    <div v-else class="text-center py-10">
-                        <div v-if="paymentStatus.type === 'success'" class="space-y-4">
-                            <div class="mx-auto h-12 w-12 rounded-full bg-emerald-100 flex items-center justify-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                                </svg>
+                        <!-- Step 2: Payment Method -->
+                        <div v-if="paymentStep === 2" class="space-y-4">
+                            <div>
+                                <p class="text-sm font-semibold text-[#2f4686] mb-1">Choose Payment Method</p>
+                                <p class="text-xs text-slate-500">Select how you'd like to pay for your reservation.</p>
                             </div>
-                            <h4 class="text-xl font-semibold text-emerald-700">Payment Successful</h4>
-                            <p class="text-sm text-slate-600">This was a mock payment. No charges were made.</p>
-                            <button type="button" class="mt-2 inline-flex items-center justify-center gap-2 bg-[#2f4686] hover:bg-[#3956a3] text-white font-semibold text-sm px-5 py-2.5 rounded-full" @click="closePayment">
-                                Close
-                            </button>
-                        </div>
-                        <div v-else class="space-y-4">
-                            <div class="mx-auto h-12 w-12 rounded-full bg-amber-100 flex items-center justify-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+
+                            <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
+                                <p class="text-xs text-amber-800">
+                                    <strong>Note:</strong> GCash and Maya payments are mock transactions for demonstration purposes only. No actual charges will be made.
+                                </p>
                             </div>
-                            <h4 class="text-xl font-semibold text-amber-700">Cash Reservation Held</h4>
-                            <p class="text-sm text-slate-600">Your slot is reserved for 1 hour. Please confirm and pay onsite to keep your reservation.</p>
-                            <button type="button" class="mt-2 inline-flex items-center justify-center gap-2 bg-[#2f4686] hover:bg-[#3956a3] text-white font-semibold text-sm px-5 py-2.5 rounded-full" @click="closePayment">
-                                Close
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <button type="button" @click="selectPayment('gcash')" :class="['h-24 rounded-xl border flex items-center justify-center gap-3 transition', selectedPayment === 'gcash' ? 'border-[#2f4686] ring-2 ring-[#2f4686]/30 bg-[#2f4686]/5' : 'border-slate-200 hover:border-slate-300']">
+                                    <img :src="gcashLogo" alt="GCash" class="h-8 w-auto" />
+                                    <span class="sr-only">GCash</span>
+                                </button>
+                                <button type="button" @click="selectPayment('maya')" :class="['h-24 rounded-xl border flex items-center justify-center gap-3 transition', selectedPayment === 'maya' ? 'border-[#2f4686] ring-2 ring-[#2f4686]/30 bg-[#2f4686]/5' : 'border-slate-200 hover:border-slate-300']">
+                                    <img :src="mayaLogo" alt="Maya" class="h-8 w-auto" />
+                                    <span class="sr-only">Maya</span>
+                                </button>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="h-px flex-1 bg-slate-200" />
+                                <span class="text-[11px] uppercase tracking-wider text-slate-400">or</span>
+                                <div class="h-px flex-1 bg-slate-200" />
+                            </div>
+                            <button type="button" @click="selectPayment('cash')" :class="['w-full h-14 rounded-xl border flex items-center justify-between px-4 transition', selectedPayment === 'cash' ? 'border-[#2f4686] ring-2 ring-[#2f4686]/30 bg-[#2f4686]/5' : 'border-slate-200 hover:border-slate-300']">
+                                <div class="flex flex-col text-left">
+                                    <span class="text-sm font-semibold text-[#2f4686]">Cash (Onsite)</span>
+                                    <span class="text-xs text-slate-500">Secures 1 hour; confirm and pay at the counter</span>
+                                </div>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                                </svg>
                             </button>
+
+                            <div class="flex gap-3 pt-2">
+                                <button 
+                                    type="button" 
+                                    class="flex-1 inline-flex items-center justify-center gap-2 border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-sm px-5 py-3 rounded-xl transition-colors"
+                                    @click="backToDetails"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+                                    </svg>
+                                    Back
+                                </button>
+                                <button 
+                                    type="button" 
+                                    class="flex-1 inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm px-5 py-3 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors" 
+                                    :disabled="!selectedPayment" 
+                                    @click="confirmPayment"
+                                >
+                                    <span v-if="selectedPayment === 'cash'">Reserve 1 Hour</span>
+                                    <span v-else>Complete Payment</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
+
+                        <!-- Step 3: Confirmation -->
+                        <div v-if="paymentStep === 3" class="text-center py-10">
+                            <div v-if="paymentStatus.type === 'success'" class="space-y-4">
+                                <div class="mx-auto h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                </div>
+                                <h4 class="text-xl font-bold text-emerald-700">Payment Successful!</h4>
+                                <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-left space-y-2">
+                                    <p class="text-sm text-emerald-900 font-semibold">Reservation Confirmed</p>
+                                    <div class="text-xs text-emerald-800 space-y-1">
+                                        <p><strong>Name:</strong> {{ customerDetails.name }}</p>
+                                        <p><strong>Email:</strong> {{ customerDetails.email }}</p>
+                                        <p><strong>Phone:</strong> {{ customerDetails.phone }}</p>
+                                        <p v-if="customerDetails.company_name"><strong>Company:</strong> {{ customerDetails.company_name }}</p>
+                                        <p><strong>Space:</strong> {{ selectedSpace?.name }}</p>
+                                        <p><strong>Date:</strong> {{ bookingDate }}</p>
+                                        <p><strong>Time:</strong> {{ bookingStart }}</p>
+                                        <p><strong>Duration:</strong> {{ finalizedPricing.hours }} hour(s)</p>
+                                        <p><strong>Rate per Hour:</strong> {{ formatCurrency(finalizedPricing.hourlyRate || 0) }}</p>
+                                        <p v-if="finalizedPricing.qualifies"><strong>Discount Applied:</strong> {{ finalizedPricing.discountPercentage }}% (saved {{ formatCurrency(finalizedPricing.discountAmount || 0) }})</p>
+                                        <p v-else-if="finalizedPricing.discountPercentage && finalizedPricing.discountHours"><strong>Discount Info:</strong> Save {{ finalizedPricing.discountPercentage }}% on {{ finalizedPricing.discountHours }}+ hour bookings.</p>
+                                        <p><strong>Total Paid:</strong> {{ formatCurrency(finalizedPricing.finalCost || 0) }}</p>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-slate-500 italic">Note: This was a mock payment for demonstration purposes. No actual charges were made.</p>
+                                <button type="button" class="mt-2 inline-flex items-center justify-center gap-2 bg-[#2f4686] hover:bg-[#3956a3] text-white font-semibold text-sm px-6 py-2.5 rounded-full" @click="closePayment">
+                                    Close
+                                </button>
+                            </div>
+                            <div v-else class="space-y-4">
+                                <div class="mx-auto h-16 w-16 rounded-full bg-amber-100 flex items-center justify-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <h4 class="text-xl font-bold text-amber-700">Reservation Held</h4>
+                                <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left space-y-2">
+                                    <p class="text-sm text-amber-900 font-semibold">Your slot is reserved for 1 hour</p>
+                                    <div class="text-xs text-amber-800 space-y-1">
+                                        <p><strong>Name:</strong> {{ customerDetails.name }}</p>
+                                        <p><strong>Email:</strong> {{ customerDetails.email }}</p>
+                                        <p><strong>Phone:</strong> {{ customerDetails.phone }}</p>
+                                        <p v-if="customerDetails.company_name"><strong>Company:</strong> {{ customerDetails.company_name }}</p>
+                                        <p><strong>Space:</strong> {{ selectedSpace?.name }}</p>
+                                        <p><strong>Duration Held:</strong> {{ finalizedPricing.hours }} hour(s)</p>
+                                        <p><strong>Amount Due Onsite:</strong> {{ formatCurrency(finalizedPricing.finalCost || 0) }}</p>
+                                    </div>
+                                </div>
+                                <p class="text-sm text-slate-600">Please visit the counter within 1 hour to confirm and pay for your reservation.</p>
+                                <button type="button" class="mt-2 inline-flex items-center justify-center gap-2 bg-[#2f4686] hover:bg-[#3956a3] text-white font-semibold text-sm px-6 py-2.5 rounded-full" @click="closePayment">
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="showAuthPrompt" class="fixed inset-0 z-50">
+            <div class="absolute inset-0 bg-black/60" @click="closeAuthPrompt" />
+            <div class="relative z-10 max-w-md w-11/12 sm:w-full mx-auto mt-24 bg-white rounded-2xl shadow-xl overflow-hidden">
+                <div class="px-6 py-5 border-b flex items-center justify-between">
+                    <div>
+                        <p class="text-xs uppercase tracking-wide text-slate-500">Sign in required</p>
+                        <h3 class="text-lg font-semibold text-[#2f4686]">Log in to reserve your space</h3>
+                    </div>
+                    <button class="h-9 w-9 inline-flex items-center justify-center rounded-full hover:bg-slate-100" @click="closeAuthPrompt" aria-label="Close auth prompt">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="px-6 py-5 space-y-4">
+                    <p class="text-sm text-slate-600">Create an account or log in to book a workspace and manage your reservations.</p>
+                    <div class="space-y-3">
+                        <a :href="route('register')" class="flex items-center justify-center gap-2 rounded-xl bg-[#2f4686] hover:bg-[#3956a3] text-white font-semibold text-sm px-4 py-3 transition-colors">
+                            Create an Account
+                        </a>
+                        <a :href="route('login')" class="flex items-center justify-center gap-2 rounded-xl border border-[#2f4686] text-[#2f4686] hover:bg-[#eef2ff] font-semibold text-sm px-4 py-3 transition-colors">
+                            Log In
+                        </a>
+                        <a :href="googleAuthUrl" class="flex items-center justify-center gap-2 rounded-xl border border-slate-200 hover:border-slate-300 text-slate-700 font-semibold text-sm px-4 py-3 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 48 48">
+                                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.28 9.21 3.77l6.84-6.84C35.1 2.53 29.92 0 24 0 14.64 0 6.51 5.38 2.69 13.22l7.98 6.2C12.37 13.99 17.74 9.5 24 9.5z" />
+                                <path fill="#4285F4" d="M46.5 24c0-1.63-.15-3.2-.42-4.71H24v9.02h12.7c-.55 2.97-2.21 5.5-4.7 7.19l7.18 5.59C43.73 36.79 46.5 30.86 46.5 24z" />
+                                <path fill="#FBBC05" d="M10.67 28.02c-.48-1.45-.76-3-.76-4.59s.27-3.14.76-4.59l-7.98-6.2C.96 15.82 0 19.29 0 23c0 3.71.96 7.18 2.69 10.36l7.98-5.34z" />
+                                <path fill="#34A853" d="M24 46c5.92 0 11.09-1.95 14.78-5.29l-7.18-5.59c-2 1.35-4.56 2.14-7.6 2.14-6.26 0-11.62-4.49-13.35-10.52l-7.98 5.34C6.51 42.62 14.64 48 24 48z" />
+                                <path fill="none" d="M0 0h48v48H0z" />
+                            </svg>
+                            Continue with Google
+                        </a>
                     </div>
                 </div>
             </div>
@@ -705,6 +1557,13 @@ const confirmPayment = () => {
     display: -webkit-box;
     line-clamp: 2;
     -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.line-clamp-3 {
+    display: -webkit-box;
+    line-clamp: 3;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }

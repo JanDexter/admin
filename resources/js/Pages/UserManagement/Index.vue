@@ -3,6 +3,13 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
+const onRowClick = (user, event) => {
+    if (event.target.closest('a, button, input')) {
+        return;
+    }
+    router.get(route('user-management.edit', user.id));
+};
+
 const props = defineProps({
     users: Object,
     stats: Object,
@@ -263,6 +270,7 @@ const toggleUserStatus = (user) => {
                                 <tr>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
@@ -270,7 +278,7 @@ const toggleUserStatus = (user) => {
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                <tr v-for="(user, index) in users.data" :key="user.id" class="hover:bg-gray-50">
+                                <tr v-for="(user, index) in users.data" :key="user.id" class="hover:bg-gray-50 cursor-pointer" @click="onRowClick(user, $event)">
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                         {{ index + 1 + (users.current_page - 1) * users.per_page }}
                                     </td>
@@ -279,6 +287,9 @@ const toggleUserStatus = (user) => {
                                             <div class="text-sm font-medium text-gray-900">{{ user.name }}</div>
                                             <div class="text-sm text-gray-500">{{ user.email }}</div>
                                         </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        {{ user.phone || '-' }}
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <span :class="`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleColor(user.role)}`">

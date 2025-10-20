@@ -28,6 +28,46 @@ class DashboardController extends Controller
             $query->with('currentCustomer');
         }])->get();
 
+        // Get recent transactions (completed reservations)
+        $recentTransactions = Reservation::with(['customer', 'space.spaceType'])
+            ->whereIn('status', ['completed', 'paid'])
+            ->whereNotNull('end_time')
+            ->orderBy('end_time', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(function($reservation) {
+                // For open-time, always use the saved cost (should be set on end)
+                $cost = $reservation->is_open_time ? $reservation->cost : ($reservation->cost ?? $reservation->total_cost);
+                return [
+                    'id' => $reservation->id,
+                    'customer_name' => $reservation->customer->company_name ?? $reservation->customer->name ?? 'N/A',
+                    'space_name' => $reservation->space->name ?? 'N/A',
+                    'space_type' => $reservation->space->spaceType->name ?? 'N/A',
+                    'start_time' => $reservation->start_time,
+                    'end_time' => $reservation->end_time,
+                    'cost' => $cost,
+                    'status' => $reservation->status,
+                ];
+            });
+
+        // Get active services (ongoing reservations)
+        $activeServices = Reservation::with(['customer', 'space.spaceType'])
+            ->whereIn('status', ['active'])
+            ->whereNull('end_time')
+            ->orderBy('start_time', 'desc')
+            ->get()
+            ->map(function($reservation) {
+                return [
+                    'id' => $reservation->id,
+                    'customer_name' => $reservation->customer->company_name ?? $reservation->customer->name ?? 'N/A',
+                    'space_name' => $reservation->space->name ?? 'N/A',
+                    'space_type' => $reservation->space->spaceType->name ?? 'N/A',
+                    'start_time' => $reservation->start_time,
+                    'hourly_rate' => $reservation->effective_hourly_rate,
+                    'is_open_time' => $reservation->is_open_time,
+                ];
+            });
+
         // Sorting params
         $sortBy = $request->query('sort_by', 'date');
         $sortDir = strtolower($request->query('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
@@ -83,6 +123,8 @@ class DashboardController extends Controller
             'stats' => $stats,
             'customers' => $customers,
             'spaceTypes' => $spaceTypes,
+            'recentTransactions' => $recentTransactions,
+            'activeServices' => $activeServices,
             'sort_by' => $sortBy,
             'sort_dir' => $sortDir,
         ]);

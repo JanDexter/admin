@@ -8,12 +8,18 @@ use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\SpaceManagementController;
 use App\Http\Controllers\PublicReservationController;
 use App\Http\Controllers\CustomerViewController;
+use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\AccountingController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\AdminReservationController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get('/', CustomerViewController::class)->name('customer.view');
+
+Route::get('/auth/google', [GoogleAuthController::class, 'redirectToGoogle'])->name('auth.google.redirect');
+Route::get('/auth/google/callback', [GoogleAuthController::class, 'handleGoogleCallback'])->name('auth.google.callback');
 
 $adminPrefix = trim(config('app.admin_area_prefix', 'coz-control'), '/');
 
@@ -39,6 +45,10 @@ Route::post('/public/reservations', [PublicReservationController::class, 'store'
     ->middleware('auth')
     ->name('public.reservations.store');
 
+// Check availability for specific time window - no auth required
+Route::post('/public/check-availability', [PublicReservationController::class, 'checkAvailability'])
+    ->name('public.check-availability');
+
 // The registration routes are now handled by the controller and auth.php
 // Route::any('/register', function () {
 //     return redirect()->route('login')->with('status', 'Registration is disabled. Please ask the admin to create your account.');
@@ -48,8 +58,8 @@ Route::post('/public/reservations', [PublicReservationController::class, 'store'
 //     return redirect()->route('login')->with('status', 'Registration is disabled. Please ask the admin to create your account.');
 // });
 
-// Authenticated admin area behind configurable prefix
-Route::middleware(['auth'])->prefix($adminPrefix)->group(function () {
+// Authenticated admin area behind configurable prefix (admin only)
+Route::middleware(['auth', 'can:admin-access'])->prefix($adminPrefix)->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
     
     // Customer management routes 
@@ -80,6 +90,7 @@ Route::middleware(['auth'])->prefix($adminPrefix)->group(function () {
     // Space management routes (Admin only)
     Route::middleware('can:admin-access')->group(function () {
         Route::get('space-management', [SpaceManagementController::class, 'index'])->name('space-management.index');
+    Route::patch('space-management/space-types/{spaceType}/details', [SpaceManagementController::class, 'updateDetails'])->name('space-management.update-details');
         Route::patch('space-management/space-types/{spaceType}/pricing', [SpaceManagementController::class, 'updatePricing'])->name('space-management.update-pricing');
         Route::patch('space-management/spaces/{space}/assign', [SpaceManagementController::class, 'assignSpace'])->name('space-management.assign-space');
         Route::patch('space-management/spaces/{space}/release', [SpaceManagementController::class, 'releaseSpace'])->name('space-management.release-space');
@@ -90,6 +101,10 @@ Route::middleware(['auth'])->prefix($adminPrefix)->group(function () {
         Route::delete('space-management/space-types/{spaceType}', [SpaceManagementController::class, 'destroySpaceType'])->name('space-management.destroy-space-type');
         Route::post('space-management/spaces/{space}/start-open-time', [SpaceManagementController::class, 'startOpenTime'])->name('space-management.start-open-time');
         Route::post('space-management/spaces/{space}/end-open-time', [SpaceManagementController::class, 'endOpenTime'])->name('space-management.end-open-time');
+        
+        // Payment routes
+        Route::post('payments/reservations/{reservation}', [PaymentController::class, 'processPayment'])->name('payments.process');
+        Route::post('payments/customers/{customer}', [PaymentController::class, 'processCustomerPayment'])->name('payments.customer');
     });
     
     // Profile routes
@@ -99,8 +114,21 @@ Route::middleware(['auth'])->prefix($adminPrefix)->group(function () {
 
     Route::get('calendar', [CalendarController::class, 'index'])->name('calendar');
 
+    Route::put('reservations/{reservation}', [AdminReservationController::class, 'update'])->name('admin.reservations.update');
+    Route::post('reservations/{reservation}/close', [AdminReservationController::class, 'close'])->name('admin.reservations.close');
+
     // Accounting routes
     Route::get('accounting', [AccountingController::class, 'index'])->name('accounting.index');
+    Route::get('accounting/export', [AccountingController::class, 'export'])->name('accounting.export');
+    Route::put('accounting/{reservation}', [AccountingController::class, 'update'])->name('accounting.update');
+});
+
+// Customer reservation management routes (authenticated customers)
+Route::middleware('auth')->group(function () {
+    Route::post('reservations/{reservation}/extend', [PublicReservationController::class, 'extend'])->name('reservations.extend');
+    Route::post('reservations/{reservation}/end-early', [PublicReservationController::class, 'endEarly'])->name('reservations.end-early');
+    Route::post('reservations/{reservation}/pay', [PaymentController::class, 'processCustomerPayment'])->name('customer.reservations.pay');
+    Route::delete('reservations/{reservation}', [PublicReservationController::class, 'destroy'])->name('reservations.destroy');
 });
 
 require __DIR__.'/auth.php';

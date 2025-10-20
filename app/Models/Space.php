@@ -40,6 +40,11 @@ class Space extends Model
         return $this->belongsTo(Customer::class, 'current_customer_id');
     }
 
+    public function reservations()
+    {
+        return $this->hasMany(Reservation::class);
+    }
+
     public function getStatusColorAttribute()
     {
         return match($this->status) {

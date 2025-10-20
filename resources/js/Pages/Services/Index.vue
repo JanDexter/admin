@@ -3,6 +3,13 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
+const onRowClick = (service, event) => {
+    if (event.target.closest('a, button, input')) {
+        return;
+    }
+    router.get(route('services.show', service.id));
+};
+
 defineProps({
     services: Object,
 });
@@ -78,7 +85,7 @@ const deleteService = (serviceId) => {
                                     </tr>
                                 </thead>
                                 <tbody class="bg-white divide-y divide-gray-200">
-                                    <tr v-for="service in services.data" :key="service.id" class="hover:bg-gray-50">
+                                    <tr v-for="service in services.data" :key="service.id" class="hover:bg-gray-50 cursor-pointer" @click="onRowClick(service, $event)">
                                         <td class="px-6 py-4 whitespace-nowrap">
                                             <div>
                                                 <div class="text-sm font-medium text-gray-900">{{ service.name }}</div>

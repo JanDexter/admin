@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Reservation;
+use App\Models\Space;
+use App\Models\SpaceType;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -10,29 +12,87 @@ class CalendarController extends Controller
 {
     public function index(Request $request)
     {
-        $events = Reservation::with(['customer', 'space.spaceType'])->get()->map(function ($reservation) {
+        $reservations = Reservation::with(['customer', 'space.spaceType', 'spaceType'])
+            ->where(function ($query) {
+                $query->whereNull('status')
+                    ->orWhere('status', '!=', 'completed');
+            })
+            ->get();
+
+        $events = $reservations->map(function ($reservation) {
+            $customer = $reservation->customer;
+            $space = $reservation->space;
+            $spaceType = $reservation->spaceType ?: ($space ? $space->spaceType : null);
+
+            $totalCost = $reservation->total_cost;
+            $amountPaid = (float) ($reservation->amount_paid ?? 0);
+            $amountRemaining = $reservation->amount_remaining;
+
             return [
                 'id' => $reservation->id,
-                'title' => $reservation->space->name ?? 'Reservation',
-                'start' => $reservation->start_time,
-                'end' => $reservation->end_time,
-                'allDay' => $reservation->is_open_time,
+                'title' => $space?->name ?? $spaceType?->name ?? 'Reservation',
+                'start' => optional($reservation->start_time)->toIso8601String(),
+                'end' => optional($reservation->end_time)->toIso8601String(),
+                'allDay' => (bool) $reservation->is_open_time,
                 'extendedProps' => [
-                    'customerName' => $reservation->customer->name ?? 'N/A',
-                    'spaceName' => $reservation->space->name ?? 'N/A',
-                    'spaceTypeName' => $reservation->space->spaceType->name ?? 'N/A',
+                    'space' => $space?->name,
+                    'spaceType' => $spaceType?->name,
+                    'spaceTypeId' => $spaceType?->id,
+                    'customer' => $customer?->name ?? $customer?->company_name,
+                    'contact' => $customer?->contact_person,
+                    'email' => $customer?->email,
+                    'phone' => $customer?->phone,
                     'status' => $reservation->status,
-                    'totalCost' => $reservation->total_cost,
                     'paymentMethod' => $reservation->payment_method,
-                    'is_open_time' => $reservation->is_open_time,
+                    'rate' => $reservation->effective_hourly_rate,
+                    'cost' => $totalCost,
+                    'amountPaid' => $amountPaid,
+                    'amountRemaining' => $amountRemaining,
+                    'is_open_time' => (bool) $reservation->is_open_time,
+                    'notes' => $reservation->notes,
+                    'hours' => $reservation->hours,
+                    'pax' => $reservation->pax,
+                    'reservation' => [
+                        'id' => $reservation->id,
+                        'status' => $reservation->status,
+                        'payment_method' => $reservation->payment_method,
+                        'amount_paid' => $amountPaid,
+                        'amount_remaining' => $amountRemaining,
+                        'total_cost' => $totalCost,
+                        'notes' => $reservation->notes,
+                        'start_time' => optional($reservation->start_time)->toIso8601String(),
+                        'end_time' => optional($reservation->end_time)->toIso8601String(),
+                        'hours' => $reservation->hours,
+                        'pax' => $reservation->pax,
+                        'is_open_time' => (bool) $reservation->is_open_time,
+                        'space_type' => $spaceType ? [
+                            'id' => $spaceType->id,
+                            'name' => $spaceType->name,
+                        ] : null,
+                        'space' => $space ? [
+                            'id' => $space->id,
+                            'name' => $space->name,
+                        ] : null,
+                        'customer' => $customer ? [
+                            'id' => $customer->id,
+                            'name' => $customer->name ?? $customer->company_name,
+                            'email' => $customer->email,
+                            'phone' => $customer->phone,
+                        ] : null,
+                    ],
                 ],
                 'backgroundColor' => $this->getEventColor($reservation->status),
                 'borderColor' => $this->getEventColor($reservation->status),
             ];
-        });
+        })->values();
+
+        $spaceTypes = SpaceType::all();
+        $spaces = Space::all();
 
         return Inertia::render('Calendar/Index', [
             'events' => $events,
+            'spaceTypes' => $spaceTypes,
+            'spaces' => $spaces,
         ]);
     }
 
@@ -43,8 +103,10 @@ class CalendarController extends Controller
             case 'completed':
                 return '#10B981'; // Emerald 500
             case 'active':
+            case 'confirmed':
                 return '#3B82F6'; // Blue 500
             case 'hold':
+            case 'pending':
                 return '#F59E0B'; // Amber 500
             case 'cancelled':
                 return '#EF4444'; // Red 500

@@ -3,6 +3,13 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 
+const onRowClick = (customer, event) => {
+    if (event.target.closest('a, button, input')) {
+        return;
+    }
+    router.get(route('customers.show', customer.id));
+};
+
 defineProps({
     customers: Object,
 });
@@ -130,7 +137,7 @@ const formatDate = (dateString) => {
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                <tr v-for="(customer, index) in customers.data" :key="customer.id" class="hover:bg-gray-50">
+                                <tr v-for="(customer, index) in customers.data" :key="customer.id" class="hover:bg-gray-50 cursor-pointer" @click="onRowClick(customer, $event)">
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <input type="checkbox" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
                                     </td>

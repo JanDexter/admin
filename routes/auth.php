@@ -15,14 +15,19 @@ $adminLoginPath = trim(config('app.admin_login_path', 'coz-control-access'), '/'
 $adminAreaPrefix = trim(config('app.admin_area_prefix', 'coz-control'), '/');
 
 Route::middleware('guest')->group(function () use ($adminLoginPath) {
-    // Registration is now handled by the controller
+    // Customer-facing registration
     Route::get('register', [RegisteredUserController::class, 'create'])
         ->name('register');
     Route::post('register', [RegisteredUserController::class, 'store']);
 
-    Route::get($adminLoginPath, [AuthenticatedSessionController::class, 'create'])
+    // Customer-facing login (this is the main login route for customers)
+    Route::get('login', [AuthenticatedSessionController::class, 'create'])
         ->name('login');
+    Route::post('login', [AuthenticatedSessionController::class, 'store']);
 
+    // Admin-only login (separate route for admin access)
+    Route::get($adminLoginPath, [AuthenticatedSessionController::class, 'create'])
+        ->name('admin.login');
     Route::post($adminLoginPath, [AuthenticatedSessionController::class, 'store']);
 
     Route::get($adminLoginPath.'/forgot-password', [PasswordResetLinkController::class, 'create'])

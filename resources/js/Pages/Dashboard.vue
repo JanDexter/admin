@@ -1,18 +1,52 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { usePWA } from '@/composables/usePWA.js';
+import PaymentModal from '@/Components/PaymentModal.vue';
 
 const props = defineProps({
     stats: Object,
     customers: Object,
     spaceTypes: Array,
+    recentTransactions: Array,
+    activeServices: Array,
 });
 
 const { isOnline, isInstallable, isInstalled, installPWA } = usePWA();
 
 const searchQuery = ref('');
+const showPaymentModal = ref(false);
+const selectedPayment = ref(null);
+
+const openPaymentModal = (service) => {
+    selectedPayment.value = {
+        id: service.id,
+        customer_name: service.customer_name,
+        space_name: service.space_name,
+        space_type: service.space_type,
+        total_cost: service.hourly_rate * (service.start_time ? Math.max(1, Math.ceil((Date.now() - new Date(service.start_time).getTime()) / (1000 * 60 * 60))) : 1),
+        cost: service.hourly_rate * (service.start_time ? Math.max(1, Math.ceil((Date.now() - new Date(service.start_time).getTime()) / (1000 * 60 * 60))) : 1),
+    };
+    showPaymentModal.value = true;
+};
+
+const closePaymentModal = () => {
+    showPaymentModal.value = false;
+    selectedPayment.value = null;
+};
+
+const formatLocalDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' });
+};
+
+const formatLocalDateTime = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' });
+};
 
 const getStatusColor = (status) => {
     const colors = {
@@ -25,14 +59,29 @@ const getStatusColor = (status) => {
     return colors[status.toLowerCase()] || 'bg-gray-100 text-gray-800';
 };
 
+// Live clock for open-time running totals
+const nowTick = ref(Date.now());
+let tickTimer;
+
+onMounted(() => {
+    tickTimer = setInterval(() => {
+        nowTick.value = Date.now();
+    }, 1000);
+});
+
+onBeforeUnmount(() => {
+    if (tickTimer) clearInterval(tickTimer);
+});
+
+const runningHours = (start) => {
+    if (!start) return 0;
+    const diff = nowTick.value - new Date(start).getTime();
+    return Math.max(1, Math.ceil(diff / (1000 * 60 * 60)));
+};
+
 const formatDate = (dateString) => {
     if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric' 
-    });
+    return formatLocalDate(dateString);
 };
 
 const getTotalSpaces = (spaceType) => {
@@ -286,6 +335,94 @@ const getSlotAvailabilityColor = (spaceType) => {
                     </div>
                 </div>
 
+                <!-- Active Services & Recent Transactions -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                    <!-- Active Services -->
+                    <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                        <div class="p-6">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-4">Active Services</h3>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Space</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Started</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-200">
+                                        <tr v-for="service in activeServices" :key="service.id" class="hover:bg-gray-50">
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{{ service.customer_name }}</td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                <div>{{ service.space_name }}</div>
+                                                <div class="text-xs text-gray-400">{{ service.space_type }}</div>
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{{ formatLocalDateTime(service.start_time) }}</td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                                                <div class="flex flex-col">
+                                                    <div>
+                                                        ₱{{ service.hourly_rate }}/h
+                                                        <span v-if="service.is_open_time" class="ml-1 text-xs text-orange-600">(Open)</span>
+                                                    </div>
+                                                    <div v-if="service.is_open_time" class="text-xs text-gray-500">
+                                                        Elapsed: {{ runningHours(service.start_time) }}h · Est: ₱{{ (runningHours(service.start_time) * (service.hourly_rate || 0)).toFixed(2) }}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm">
+                                                <button
+                                                    @click="openPaymentModal(service)"
+                                                    class="text-green-600 hover:text-green-800 font-medium"
+                                                >
+                                                    Pay Now
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr v-if="!activeServices || activeServices.length === 0">
+                                            <td colspan="5" class="px-4 py-3 text-center text-sm text-gray-500">No active services</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Transactions -->
+                    <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                        <div class="p-6">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-4">Recent Transactions</h3>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Space</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-200">
+                                        <tr v-for="transaction in recentTransactions" :key="transaction.id" class="hover:bg-gray-50">
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{{ transaction.customer_name }}</td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                                <div>{{ transaction.space_name }}</div>
+                                                <div class="text-xs text-gray-400">{{ transaction.space_type }}</div>
+                                            </td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{{ formatLocalDate(transaction.end_time) }}</td>
+                                            <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">₱{{ transaction.cost ? Number(transaction.cost).toFixed(2) : '0.00' }}</td>
+                                        </tr>
+                                        <tr v-if="!recentTransactions || recentTransactions.length === 0">
+                                            <td colspan="4" class="px-4 py-3 text-center text-sm text-gray-500">No recent transactions</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Customer Management -->
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <!-- Search and Filter Bar -->
@@ -449,5 +586,13 @@ const getSlotAvailabilityColor = (spaceType) => {
                 </div>
             </div>
         </div>
+        
+        <!-- Payment Modal -->
+        <PaymentModal
+            :show="showPaymentModal"
+            :reservation="selectedPayment"
+            @close="closePaymentModal"
+            @paid="router.reload({ only: ['activeServices', 'recentTransactions'] })"
+        />
     </AuthenticatedLayout>
 </template>

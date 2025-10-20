@@ -22,15 +22,18 @@ const submit = () => {
 };
 
 const onPhoneInput = (e) => {
-    let v = e.target.value.replace(/\D/g, '');
-    if (/^63(9\d{9})$/.test(v)) v = '0' + RegExp.$1;
-    if (/^9\d{9}$/.test(v)) v = '0' + v;
-    if (v.length > 11) v = v.slice(0, 11);
-    form.phone = v;
+    const value = e.target.value ?? '';
+    const hasPlus = value.trim().startsWith('+');
+    let digits = value.replace(/\D/g, '');
+    if (digits.length > 15) {
+        digits = digits.slice(0, 15);
+    }
+    form.phone = hasPlus ? `+${digits}` : digits;
 };
 const phoneError = computed(() => {
     if (!form.phone) return '';
-    return /^09\d{9}$/.test(form.phone) ? '' : 'Phone must start with 09 and be 11 digits.';
+    const digits = form.phone.startsWith('+') ? form.phone.slice(1) : form.phone;
+    return digits.length >= 10 && digits.length <= 15 ? '' : 'Phone must include 10 to 15 digits.';
 });
 </script>
 
@@ -89,10 +92,8 @@ const phoneError = computed(() => {
                                     id="phone"
                                     v-model="form.phone"
                                     @input="onPhoneInput"
-                                    inputmode="numeric"
-                                    pattern="09\\d{9}"
-                                    maxlength="11"
-                                    placeholder="09XXXXXXXXX"
+                                    inputmode="tel"
+                                    placeholder="09XXXXXXXXX or +639XXXXXXXXX"
                                     type="tel"
                                     class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                 />

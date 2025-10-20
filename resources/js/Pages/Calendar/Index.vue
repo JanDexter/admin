@@ -1,94 +1,195 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head } from '@inertiajs/vue3';
+import { Head, router } from '@inertiajs/vue3';
 import FullCalendar from '@fullcalendar/vue3';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { ref } from 'vue';
+import { ref, computed, watch } from 'vue';
+import OccupancySummary from '@/Components/OccupancySummary.vue';
+import AdminReservationModal from '@/Components/AdminReservationModal.vue';
 
 const props = defineProps({
     events: Array,
+    spaceTypes: Array,
+    spaces: Array,
 });
 
-// Modal state for event details
-const showEventModal = ref(false);
-const selectedEvent = ref(null);
+const spaceTypesList = computed(() => props.spaceTypes ?? []);
+const spacesList = computed(() => props.spaces ?? []);
 
-const openEventModal = (info) => {
-    const e = info.event;
-    selectedEvent.value = {
-        title: e.title,
-        start: e.start,
-        end: e.end,
-        ...e.extendedProps,
-    };
-    showEventModal.value = true;
-};
+const activeTab = ref(spaceTypesList.value[0]?.id ?? null);
+const viewDate = ref(new Date());
+const showReservationModal = ref(false);
+const activeReservation = ref(null);
 
-const closeEventModal = () => {
-    showEventModal.value = false;
-    selectedEvent.value = null;
-};
+const eventsBySpaceType = computed(() => {
+    const grouped = {};
+    spaceTypesList.value.forEach(st => {
+        grouped[st.id] = [];
+    });
 
-const calendarOptions = ref({
-    plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
-    initialView: 'timeGridWeek',
-    headerToolbar: {
-        left: 'prev,next today',
-        center: 'title',
-        right: 'dayGridMonth,timeGridWeek,timeGridDay'
-    },
-    events: props.events,
-    editable: false,
-    selectable: false,
-    nowIndicator: true,
-    expandRows: true,
-    height: 'auto',
-    contentHeight: 'auto',
-    slotMinTime: '06:00:00',
-    slotMaxTime: '22:00:00',
-    slotDuration: '00:30:00',
-    dayMaxEventRows: false, // let events grow
-    eventOverlap: true,
-    eventMinHeight: 24,
-    eventDidMount: (info) => {
-        // Allow content to wrap and scale naturally
-        info.el.style.whiteSpace = 'normal';
-        info.el.style.fontSize = '0.9rem';
-        info.el.style.lineHeight = '1.2';
-        const main = info.el.querySelector('.fc-event-main');
-        if (main) {
-            main.style.whiteSpace = 'normal';
+    (props.events ?? []).forEach(event => {
+        const spaceTypeId = event.extendedProps?.spaceTypeId;
+        if (spaceTypeId && grouped[spaceTypeId]) {
+            grouped[spaceTypeId].push(event);
         }
-    },
-    eventMouseEnter: (info) => {
-        const el = info.el;
-        const event = info.event;
-        const p = event.extendedProps;
-        el.style.cursor = 'pointer';
-        const startTime = event.start?.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-        const endTime = event.end ? event.end.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Ongoing';
-        const tooltipText = [
-            `Space: ${p.space || 'N/A'}${p.spaceType ? ' ('+p.spaceType+')' : ''}`,
-            `Customer: ${p.customer || 'N/A'}`,
-            p.contact ? `Contact: ${p.contact}` : '',
-            p.email ? `Email: ${p.email}` : '',
-            p.phone ? `Phone: ${p.phone}` : '',
-            `From: ${startTime}`,
-            `Until: ${endTime}`,
-            p.rate ? `Rate: ₱${p.rate}/h` : '',
-            p.cost ? `Cost: ₱${p.cost}` : ''
-        ].filter(Boolean).join('\n');
-        el.setAttribute('title', tooltipText);
-    },
-    eventMouseLeave: (info) => {
-        info.el.removeAttribute('title');
-    },
-    eventClick: (info) => {
-        openEventModal(info);
-    }
+    });
+
+    return grouped;
 });
+
+const hasEvents = computed(() => (props.events?.length ?? 0) > 0);
+
+watch(spaceTypesList, (newList) => {
+    if (!newList.length) {
+        activeTab.value = null;
+        return;
+    }
+
+    if (!newList.some((type) => type.id === activeTab.value)) {
+        activeTab.value = newList[0].id;
+    }
+}, { immediate: true });
+
+const formatLocalDateTime = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' });
+};
+
+const openReservationModal = (reservationPayload = null) => {
+    if (!reservationPayload) return;
+    activeReservation.value = reservationPayload;
+    showReservationModal.value = true;
+};
+
+const closeReservationModal = () => {
+    showReservationModal.value = false;
+    activeReservation.value = null;
+};
+
+const handleReservationUpdated = () => {
+    closeReservationModal();
+    router.reload({ only: ['events'] });
+};
+
+const handleEventClick = (info) => {
+    const extended = info.event.extendedProps || {};
+    let reservation = extended.reservation ? JSON.parse(JSON.stringify(extended.reservation)) : null;
+
+    const fallbackMeta = {
+        status: extended.status ?? '',
+        payment_method: extended.paymentMethod ?? '',
+        amount_paid: extended.amountPaid ?? 0,
+        amount_remaining: extended.amountRemaining ?? 0,
+        total_cost: extended.cost ?? 0,
+        notes: extended.notes ?? '',
+        start_time: info.event.start ? info.event.start.toISOString() : null,
+        end_time: info.event.end ? info.event.end.toISOString() : null,
+        hours: extended.hours ?? null,
+        pax: extended.pax ?? null,
+        is_open_time: extended.is_open_time ?? false,
+        space_type: extended.spaceType ? { id: extended.spaceTypeId, name: extended.spaceType } : null,
+        space: extended.space ? { name: extended.space } : null,
+        customer: extended.customer
+            ? {
+                name: extended.customer,
+                email: extended.email ?? null,
+                phone: extended.phone ?? null,
+            }
+            : null,
+    };
+
+    if (reservation) {
+        reservation = {
+            ...fallbackMeta,
+            ...reservation,
+            space_type: reservation.space_type ?? fallbackMeta.space_type,
+            space: reservation.space ?? fallbackMeta.space,
+            customer: reservation.customer ?? fallbackMeta.customer,
+        };
+        reservation.status = reservation.status ?? fallbackMeta.status;
+        reservation.payment_method = reservation.payment_method ?? fallbackMeta.payment_method;
+        reservation.amount_paid = reservation.amount_paid ?? fallbackMeta.amount_paid;
+        reservation.amount_remaining = reservation.amount_remaining ?? fallbackMeta.amount_remaining;
+        reservation.total_cost = reservation.total_cost ?? fallbackMeta.total_cost;
+        reservation.notes = reservation.notes ?? fallbackMeta.notes;
+        reservation.start_time = reservation.start_time ?? fallbackMeta.start_time;
+        reservation.end_time = reservation.end_time ?? fallbackMeta.end_time;
+        reservation.hours = reservation.hours ?? fallbackMeta.hours;
+        reservation.pax = reservation.pax ?? fallbackMeta.pax;
+        reservation.is_open_time = reservation.is_open_time ?? fallbackMeta.is_open_time;
+        openReservationModal(reservation);
+        return;
+    }
+
+    openReservationModal({
+        id: info.event.id,
+        ...fallbackMeta,
+    });
+};
+
+const getCalendarOptions = (spaceTypeId) => {
+    return {
+        plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
+        initialView: 'timeGridWeek',
+        headerToolbar: {
+            left: 'prev,next today',
+            center: 'title',
+            right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        events: eventsBySpaceType.value[spaceTypeId] || [],
+        editable: false,
+        selectable: false,
+        nowIndicator: true,
+        expandRows: true,
+        height: 'auto',
+        contentHeight: 'auto',
+        slotMinTime: '08:00:00',
+        slotMaxTime: '26:00:00', // Extends to 2:00 AM (next day)
+        slotDuration: '00:30:00',
+        dayMaxEventRows: true,
+        eventOverlap: true,
+        eventMinHeight: 24,
+        eventDidMount: (info) => {
+            info.el.style.whiteSpace = 'normal';
+            info.el.style.fontSize = '0.9rem';
+            info.el.style.lineHeight = '1.2';
+            const main = info.el.querySelector('.fc-event-main');
+            if (main) {
+                main.style.whiteSpace = 'normal';
+            }
+        },
+        eventMouseEnter: (info) => {
+            const el = info.el;
+            const event = info.event;
+            const p = event.extendedProps;
+            el.style.cursor = 'pointer';
+            const startTime = event.start ? formatLocalDateTime(event.start.toISOString()) : '';
+            const endTime = event.end ? formatLocalDateTime(event.end.toISOString()) : 'Ongoing';
+            const tooltipText = [
+                `Space: ${p.space || 'N/A'}`,
+                `Customer: ${p.customer || 'N/A'}`,
+                p.contact ? `Contact: ${p.contact}` : '',
+                `From: ${startTime}`,
+                `Until: ${endTime}`,
+                p.rate ? `Rate: ₱${p.rate}/h` : '',
+                p.cost ? `Cost: ₱${p.cost}` : ''
+            ].filter(Boolean).join('\n');
+            el.setAttribute('title', tooltipText);
+        },
+        eventMouseLeave: (info) => {
+            info.el.removeAttribute('title');
+        },
+        eventClick: (info) => {
+            handleEventClick(info);
+        },
+        datesSet: (dateInfo) => {
+            viewDate.value = dateInfo.view.currentStart;
+        }
+    };
+};
 </script>
 
 <template>
@@ -102,41 +203,61 @@ const calendarOptions = ref({
         <div class="py-12">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
-                    <FullCalendar :options="calendarOptions" />
-                </div>
-            </div>
-        </div>
+                    <!-- Tabbed Navigation for Space Types -->
+                    <div class="mb-4 border-b border-gray-200">
+                        <nav class="-mb-px flex space-x-4" aria-label="Tabs">
+                            <button
+                                v-for="spaceType in spaceTypesList"
+                                :key="spaceType.id"
+                                @click="activeTab = spaceType.id"
+                                :class="[
+                                    activeTab === spaceType.id
+                                        ? 'border-blue-500 text-blue-600'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300',
+                                    'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm'
+                                ]"
+                            >
+                                {{ spaceType.name }}
+                            </button>
+                        </nav>
+                    </div>
 
-        <!-- Event Details Modal -->
-        <div v-if="showEventModal" class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
-            <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-                <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" @click="closeEventModal"></div>
-                <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-                <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-                    <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                        <div class="sm:flex sm:items-start">
-                            <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
-                                <h3 class="text-lg leading-6 font-medium text-gray-900">Reservation Details</h3>
-                                <div class="mt-3 text-sm text-gray-700 space-y-1" v-if="selectedEvent">
-                                    <p><span class="font-medium">Space:</span> {{ selectedEvent.space }} <span v-if="selectedEvent.spaceType" class="text-gray-500">({{ selectedEvent.spaceType }})</span></p>
-                                    <p><span class="font-medium">Customer:</span> {{ selectedEvent.customer }}</p>
-                                    <p v-if="selectedEvent.contact"><span class="font-medium">Contact:</span> {{ selectedEvent.contact }}</p>
-                                    <p v-if="selectedEvent.email"><span class="font-medium">Email:</span> {{ selectedEvent.email }}</p>
-                                    <p v-if="selectedEvent.phone"><span class="font-medium">Phone:</span> {{ selectedEvent.phone }}</p>
-                                    <p><span class="font-medium">From:</span> {{ new Date(selectedEvent.start).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }}</p>
-                                    <p><span class="font-medium">Until:</span> {{ selectedEvent.end ? new Date(selectedEvent.end).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Ongoing' }}</p>
-                                    <p v-if="selectedEvent.rate"><span class="font-medium">Rate:</span> ₱{{ selectedEvent.rate }}/h</p>
-                                    <p v-if="selectedEvent.cost"><span class="font-medium">Cost:</span> ₱{{ selectedEvent.cost }}</p>
+                    <div v-if="!spaceTypesList.length" class="text-center text-gray-500 py-10">
+                        <p>No space types available.</p>
+                    </div>
+
+                    <div v-else>
+                        <p v-if="!hasEvents" class="text-sm text-gray-500 mb-6">
+                            No reservations yet, but you can still browse each space type.
+                        </p>
+
+                        <div v-for="spaceType in spaceTypesList" :key="spaceType.id">
+                            <div v-if="activeTab === spaceType.id">
+                                <!-- Calendar Component -->
+                                <FullCalendar :options="getCalendarOptions(spaceType.id)" />
+
+                                <!-- Occupancy Summary Component -->
+                                <div class="mt-8">
+                                    <h3 class="text-lg font-medium text-gray-900 mb-4">Hourly Occupancy Summary</h3>
+                                    <OccupancySummary
+                                        :reservations="eventsBySpaceType[spaceType.id] || []"
+                                        :totalSpaces="spacesList.filter(s => s.space_type_id === spaceType.id).length"
+                                        :viewDate="viewDate"
+                                    />
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                        <button @click="closeEventModal" type="button" class="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 sm:ml-3 sm:w-auto sm:text-sm">Close</button>
-                    </div>
                 </div>
             </div>
         </div>
+
+        <AdminReservationModal
+            :show="showReservationModal"
+            :reservation="activeReservation"
+            @close="closeReservationModal"
+            @updated="handleReservationUpdated"
+        />
     </AuthenticatedLayout>
 </template>
 

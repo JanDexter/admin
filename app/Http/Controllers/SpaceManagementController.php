@@ -5,23 +5,92 @@ namespace App\Http\Controllers;
 use App\Models\Space;
 use App\Models\SpaceType;
 use App\Models\Customer;
+use App\Models\User;
 use App\Models\Reservation;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class SpaceManagementController extends Controller
 {
     public function index()
     {
-        $spaceTypes = SpaceType::with(['spaces' => function($query) {
-            $query->with('currentCustomer');
-        }])->get();
+        $now = Carbon::now();
+        
+        $spaceTypes = SpaceType::with([
+            'spaces' => function($query) use ($now) {
+                $query->with([
+                    'currentCustomer',
+                    'reservations' => function($q) use ($now) {
+                        // Get the currently active reservation for this space
+                        $q->where(function($sub) {
+                            $sub->whereNull('status')
+                              ->orWhereNotIn('status', ['completed', 'cancelled']);
+                        })
+                        ->where('start_time', '<=', $now)
+                        ->where(function($sub) use ($now) {
+                            $sub->where('end_time', '>', $now)
+                                ->orWhereNull('end_time');
+                        })
+                        ->with('customer')
+                        ->orderBy('start_time', 'asc');
+                    }
+                ]);
+            },
+            'reservations' => function($query) use ($now) {
+                // Get active reservations (not completed or cancelled) that are currently ongoing or upcoming
+                $query->where(function($q) {
+                    $q->whereNull('status')
+                      ->orWhereNotIn('status', ['completed', 'cancelled']);
+                })
+                ->where(function($q) use ($now) {
+                    // Include reservations that haven't ended yet
+                    $q->where('end_time', '>', $now)
+                      ->orWhereNull('end_time');
+                })
+                ->with('customer')
+                ->orderBy('start_time', 'asc');
+            }
+        ])->get();
 
-        // Select only guaranteed columns; compute display name in the client
+        // Transform to include reservation info in spaces
+        $spaceTypes->each(function($spaceType) use ($now) {
+            // Update each space with dynamic status based on current active reservation
+            $spaceType->spaces->each(function($space) use ($now) {
+                $activeReservation = $space->reservations->first();
+                
+                if ($activeReservation) {
+                    // There's an active reservation right now
+                    $space->dynamic_status = 'occupied';
+                    $space->active_reservation = $activeReservation;
+                    $space->current_customer_name = $activeReservation->customer->display_name ?? $activeReservation->customer->name;
+                } else {
+                    // No active reservation right now
+                    $space->dynamic_status = 'available';
+                    $space->active_reservation = null;
+                    $space->current_customer_name = null;
+                }
+            });
+            
+            // Get unassigned reservations (no space_id) for this space type
+            $unassignedReservations = $spaceType->reservations
+                ->whereNull('space_id')
+                ->filter(function($reservation) use ($now) {
+                    // Only show if it's currently active (started but not ended)
+                    return $reservation->start_time <= $now &&
+                           ($reservation->end_time === null || $reservation->end_time > $now);
+                });
+            
+            // Store for frontend access
+            $spaceType->unassigned_reservations = $unassignedReservations->values();
+        });
+
+        // Get all active customers (normalize to plain arrays to avoid mixing models and arrays)
         $customers = Customer::where('status', 'active')
-            ->select('id', 'name', 'company_name', 'contact_person', 'email', 'phone')
+            ->select('id', 'name', 'company_name', 'contact_person', 'email', 'phone', 'user_id')
             ->orderByRaw("
                 COALESCE(
                     NULLIF(name, ''),
@@ -30,12 +99,86 @@ class SpaceManagementController extends Controller
                     email
                 ) ASC
             ")
-            ->get();
+            ->get()
+            ->map(function ($c) {
+                return [
+                    'id' => $c->id,
+                    'user_id' => $c->user_id,
+                    'name' => $c->name,
+                    'company_name' => $c->company_name,
+                    'contact_person' => $c->contact_person,
+                    'email' => $c->email,
+                    'phone' => $c->phone,
+                    'is_user_only' => false,
+                ];
+            });
+
+        // Get all users who don't have a customer record yet
+        $existingUserIds = $customers->pluck('user_id')->filter();
+        $usersWithoutCustomer = User::whereNotIn('id', $existingUserIds)
+            ->where('is_active', true)
+            ->select('id', 'name', 'email', 'phone')
+            ->get()
+            ->map(function($user) {
+                // Transform users to match customer structure
+                return [
+                    'id' => 'user_' . $user->id, // Prefix with 'user_' to distinguish
+                    'user_id' => $user->id,
+                    'name' => $user->name,
+                    'company_name' => null,
+                    'contact_person' => null,
+                    'email' => $user->email,
+                    'phone' => $user->phone,
+                    'is_user_only' => true, // Flag to identify user-only records
+                ];
+            });
+
+        // Combine customers and users
+        $allCustomers = $customers->merge($usersWithoutCustomer)->values();
 
         return Inertia::render('SpaceManagement/Index', [
             'spaceTypes' => $spaceTypes,
-            'customers' => $customers,
+            'customers' => $allCustomers,
         ]);
+    }
+
+    public function updateDetails(Request $request, SpaceType $spaceType)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'photo' => 'nullable|image|max:5120',
+            'remove_photo' => 'nullable|boolean',
+        ]);
+
+        $update = [
+            'name' => strtoupper($validated['name']),
+            'description' => $validated['description'] ?? null,
+        ];
+
+        $oldPhoto = $spaceType->photo_path;
+        $hasNewUpload = $request->hasFile('photo');
+        $shouldRemove = (bool) $request->boolean('remove_photo');
+
+        if ($hasNewUpload) {
+            $path = $request->file('photo')->store('space-types', 'public');
+            $update['photo_path'] = $path;
+        } elseif ($shouldRemove) {
+            $update['photo_path'] = null;
+        }
+
+        $spaceType->update($update);
+
+        // Clean up old file if replaced or removed
+        if ($oldPhoto && ($hasNewUpload || $shouldRemove)) {
+            try {
+                Storage::disk('public')->delete($oldPhoto);
+            } catch (\Throwable $e) {
+                // swallow cleanup errors
+            }
+        }
+
+        return redirect()->back()->with('success', "Details for {$spaceType->name} updated.");
     }
 
     public function updatePricing(Request $request, SpaceType $spaceType)
@@ -70,11 +213,17 @@ class SpaceManagementController extends Controller
     public function assignSpace(Request $request, Space $space)
     {
         $validated = $request->validate([
-            'customer_id' => 'required|exists:customers,id',
+            'customer_id' => 'required',
             'occupied_until' => 'nullable|date|after:now',
             'custom_hourly_rate' => 'nullable|numeric|min:0',
             'start_time' => 'nullable|date|after_or_equal:now',
         ]);
+
+        // Handle customer_id which could be 'user_123' or actual customer ID
+        $customerId = $this->resolveCustomerId($validated['customer_id']);
+        if (!$customerId) {
+            return redirect()->back()->with('error', 'Invalid customer or user selection.');
+        }
 
         if (!$space->isAvailable()) {
             return redirect()->back()->with('error', 'Space is not available.');
@@ -83,15 +232,28 @@ class SpaceManagementController extends Controller
         $from = $validated['start_time'] ?? now();
         $until = $validated['occupied_until'] ?? null;
 
+        // Check for scheduling conflicts on this specific space
+        if ($space->id) {
+            $conflictExists = Reservation::query()
+                ->active()
+                ->where('space_id', $space->id)
+                ->overlapping(Carbon::parse($from), $until ? Carbon::parse($until) : null)
+                ->exists();
+
+            if ($conflictExists) {
+                return redirect()->back()->with('error', 'This space has a conflicting reservation during the selected time.');
+            }
+        }
+
         $space->occupy(
-            $validated['customer_id'],
+            $customerId,
             $from,
             $until
         );
 
         // Update latest reservation for this space to include custom rate (if provided)
         $reservation = \App\Models\Reservation::where('space_id', $space->id)
-            ->where('customer_id', $validated['customer_id'])
+            ->where('customer_id', $customerId)
             ->latest()
             ->first();
         if ($reservation) {
@@ -113,33 +275,51 @@ class SpaceManagementController extends Controller
     public function startOpenTime(Request $request, Space $space)
     {
         $request->validate([
-            'customer_id' => 'required|exists:customers,id',
+            'customer_id' => 'required',
         ]);
 
-        if ($space->status !== 'available') {
-            return back()->with('error', 'Space is not available.');
+        // Handle customer_id which could be 'user_123' or actual customer ID
+        $customerId = $this->resolveCustomerId($request->customer_id);
+        if (!$customerId) {
+            return redirect()->back()->with('error', 'Invalid customer or user selection.');
         }
 
-        DB::transaction(function () use ($request, $space) {
-            $space->update([
-                'status' => 'occupied',
-                'current_customer_id' => $request->customer_id,
-                'occupied_from' => Carbon::now(),
-                'occupied_until' => null, // Open time
-            ]);
+        // Dynamic availability: ensure no active reservation is currently using this space
+        $now = Carbon::now();
+        $hasActive = Reservation::where('space_id', $space->id)
+            ->where(function ($q) {
+                $q->whereNull('status')
+                  ->orWhereNotIn('status', ['completed', 'cancelled']);
+            })
+            ->where('start_time', '<=', $now)
+            ->where(function ($q) use ($now) {
+                $q->whereNull('end_time')->orWhere('end_time', '>', $now);
+            })
+            ->exists();
+
+        if ($hasActive) {
+            return back()->with('error', 'Space is currently in use.');
+        }
+
+        DB::transaction(function () use ($customerId, $space) {
+            // Get hourly rate from space or space type
+            $hourlyRate = $space->hourly_rate ?? $space->spaceType->hourly_rate ?? $space->spaceType->default_price;
 
             Reservation::create([
-                'user_id' => auth()->id(),
-                'customer_id' => $request->customer_id,
+                'user_id' => Auth::id(),
+                'customer_id' => $customerId,
                 'space_id' => $space->id,
-                'start_time' => $space->occupied_from,
-                'end_time' => null,
-                'hourly_rate' => $space->spaceType->price_per_hour,
+                'space_type_id' => $space->space_type_id,
+                'start_time' => Carbon::now(),
+                'end_time' => null, // Open time - will be set when ended
+                'applied_hourly_rate' => $hourlyRate,
                 'status' => 'active',
                 'is_open_time' => true,
+                'payment_method' => 'cash', // Open time is cash at end
+                'pax' => 1,
+                'hours' => 0,   // initialize to 0; will be computed on end
+                'cost' => 0,    // initialize to 0; will be computed on end
             ]);
-
-            $space->spaceType->decrement('available_slots');
         });
 
         return back()->with('success', 'Open time started successfully.');
@@ -159,26 +339,23 @@ class SpaceManagementController extends Controller
         DB::transaction(function () use ($space, $reservation) {
             $endTime = Carbon::now();
             $startTime = Carbon::parse($reservation->start_time);
-            $durationInHours = $startTime->diffInHours($endTime);
+            // Calculate duration in minutes, then convert to hours (rounded up)
+            $durationInMinutes = $startTime->diffInMinutes($endTime);
+            $durationInHours = ceil($durationInMinutes / 60); // Round up to nearest hour
             if ($durationInHours < 1) {
                 $durationInHours = 1; // Minimum 1 hour charge
             }
-            $totalCost = $durationInHours * $reservation->hourly_rate;
-
-            $reservation->update([
-                'end_time' => $endTime,
-                'total_cost' => $totalCost,
-                'status' => 'completed',
-            ]);
-
-            $space->update([
-                'status' => 'available',
-                'current_customer_id' => null,
-                'occupied_from' => null,
-                'occupied_until' => null,
-            ]);
-
-            $space->spaceType->increment('available_slots');
+            // Get the hourly rate from the space or space type
+            $hourlyRate = $space->hourly_rate ?? $space->spaceType->hourly_rate ?? $space->spaceType->default_price;
+            $totalCost = $durationInHours * $hourlyRate;
+            $reservation->hours = $durationInHours;
+            $reservation->cost = $totalCost;
+            $reservation->applied_hourly_rate = $hourlyRate;
+            $reservation->end_time = $endTime;
+            $reservation->status = 'pending';
+            // Do NOT mark as paid; payment must be processed separately
+            $reservation->amount_paid = 0;
+            $reservation->save();
         });
 
         return back()->with('success', 'Open time ended successfully. Total cost calculated.');
@@ -329,5 +506,45 @@ class SpaceManagementController extends Controller
         $spaceType->delete();
 
         return redirect()->back()->with('success', 'Space type removed successfully.');
+    }
+
+    /**
+     * Resolve customer ID from the input which could be 'user_123' or a customer ID
+     * If user ID, auto-create customer record if needed
+     */
+    private function resolveCustomerId($input)
+    {
+        // Check if it's a user-prefixed ID
+        if (is_string($input) && str_starts_with($input, 'user_')) {
+            $userId = (int) str_replace('user_', '', $input);
+            $user = User::find($userId);
+            
+            if (!$user) {
+                return null;
+            }
+
+            // Check if customer already exists for this user
+            $customer = Customer::where('user_id', $userId)->first();
+            
+            if (!$customer) {
+                // Auto-create customer record
+                $customer = Customer::create([
+                    'user_id' => $userId,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'phone' => $user->phone,
+                    'status' => 'active',
+                ]);
+            }
+
+            return $customer->id;
+        }
+
+        // Otherwise, verify it's a valid customer ID
+        if (Customer::where('id', $input)->exists()) {
+            return $input;
+        }
+
+        return null;
     }
 }

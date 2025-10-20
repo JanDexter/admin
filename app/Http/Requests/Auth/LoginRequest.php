@@ -62,15 +62,8 @@ class LoginRequest extends FormRequest
             ]);
         }
 
-        // Prevent customers from logging into the admin dashboard
-        $role = strtolower($user->role ?? '');
-        if ($role === 'customer') {
-            RateLimiter::hit($this->throttleKey());
-
-            throw ValidationException::withMessages([
-                'email' => 'You do not have access to the admin dashboard. Please use the customer portal if applicable.',
-            ]);
-        }
+        // No role restriction here - customers can log in through /login, admins through /coz-control-access
+        // The controller will handle the redirect based on role
 
         if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());

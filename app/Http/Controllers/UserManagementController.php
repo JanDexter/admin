@@ -64,6 +64,7 @@ class UserManagementController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email', // Unique email validation enforced
+            'phone' => 'nullable|string|max:20',
             'password' => 'required|string|min:8|confirmed',
             'role' => ['required', Rule::in(['customer', 'staff', 'admin'])],
             'is_active' => 'boolean',
@@ -92,10 +93,11 @@ class UserManagementController extends Controller
     public function show(User $user)
     {
         $user->load(['reservations' => function ($query) {
-            $query->with('space', 'customer')->latest()->take(10);
+            $query->with('space.spaceType', 'customer')->latest();
         }]);
 
-        $totalSpent = $user->reservations()->sum('cost');
+        // Use the accessor to get the correct total cost including discounts
+        $totalSpent = $user->reservations->sum('total_cost');
         $points = floor($totalSpent / 10); // Example: 1 point for every $10 spent
 
         return Inertia::render('UserManagement/Show', [
@@ -122,7 +124,8 @@ class UserManagementController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => ['required', 'email', Rule::unique('users')->ignore($user->id)], // Unique email validation enforced
+            'email' => ['required', 'email', Rule::unique('users')->ignore($user->id)], // Ignore current user's email
+            'phone' => 'nullable|string|max:20',
             'role' => ['required', Rule::in(['customer', 'staff', 'admin'])],
             'is_active' => 'boolean',
         ]);
