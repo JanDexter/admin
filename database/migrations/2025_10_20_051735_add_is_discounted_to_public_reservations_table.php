@@ -11,9 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('reservations', function (Blueprint $table) {
-            $table->boolean('is_discounted')->default(false)->after('status');
-        });
+        if (!Schema::hasColumn('reservations', 'is_discounted')) {
+            Schema::table('reservations', function (Blueprint $table) {
+                $table->boolean('is_discounted')->default(false)->after('status');
+            });
+        }
     }
 
     /**
@@ -21,8 +23,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('reservations', function (Blueprint $table) {
-            $table->dropColumn('is_discounted');
-        });
+        if (Schema::hasColumn('reservations', 'is_discounted')) {
+            Schema::table('reservations', function (Blueprint $table) {
+                $table->dropColumn('is_discounted');
+            });
+        }
     }
 };

@@ -11,10 +11,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('space_types', function (Blueprint $table) {
-            $table->text('description')->nullable()->after('name');
-            $table->string('image_path')->nullable()->after('description');
-        });
+        if (!Schema::hasColumn('space_types', 'description')) {
+            Schema::table('space_types', function (Blueprint $table) {
+                $table->text('description')->nullable()->after('name');
+            });
+        }
+
+        if (!Schema::hasColumn('space_types', 'image_path')) {
+            Schema::table('space_types', function (Blueprint $table) {
+                $table->string('image_path')->nullable()->after('description');
+            });
+        }
     }
 
     /**
@@ -22,8 +29,16 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('space_types', function (Blueprint $table) {
-            $table->dropColumn(['description', 'image_path']);
-        });
+        if (Schema::hasColumn('space_types', 'image_path')) {
+            Schema::table('space_types', function (Blueprint $table) {
+                $table->dropColumn('image_path');
+            });
+        }
+
+        if (Schema::hasColumn('space_types', 'description')) {
+            Schema::table('space_types', function (Blueprint $table) {
+                $table->dropColumn('description');
+            });
+        }
     }
 };
