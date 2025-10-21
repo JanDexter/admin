@@ -43,6 +43,9 @@ const openPaymentModal = (transaction) => {
         space_type: transaction.space?.space_type?.name || transaction.space_type?.name,
         total_cost: transaction.total_cost,
         cost: transaction.total_cost,
+        amount_paid: transaction.amount_paid || 0,
+        amount_remaining: transaction.amount_remaining ?? (transaction.total_cost - (transaction.amount_paid || 0)),
+        status: transaction.status,
     };
     showPaymentModal.value = true;
 };

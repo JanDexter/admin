@@ -92,16 +92,38 @@ class UserManagementController extends Controller
      */
     public function show(User $user)
     {
-        $user->load(['reservations' => function ($query) {
-            $query->with('space.spaceType', 'customer')->latest();
-        }]);
+        // Load reservations with relationships like Dashboard does
+        $reservations = \App\Models\Reservation::with(['customer', 'space.spaceType'])
+            ->where('user_id', $user->id)
+            ->whereIn('status', ['completed', 'paid', 'partial', 'pending', 'active'])
+            ->orderBy('created_at', 'desc')
+            ->limit(20)
+            ->get()
+            ->map(function($reservation) {
+                $cost = $reservation->is_open_time ? $reservation->cost : ($reservation->cost ?? $reservation->total_cost);
+                return [
+                    'id' => $reservation->id,
+                    'customer_name' => $reservation->customer->company_name ?? $reservation->customer->name ?? 'N/A',
+                    'space_name' => $reservation->space->name ?? 'N/A',
+                    'space_type' => $reservation->space->spaceType->name ?? 'N/A',
+                    'start_time' => $reservation->start_time,
+                    'end_time' => $reservation->end_time,
+                    'cost' => $cost,
+                    'total_cost' => $reservation->total_cost,
+                    'amount_paid' => $reservation->amount_paid ?? 0,
+                    'status' => $reservation->status,
+                    'payment_method' => $reservation->payment_method,
+                    'is_open_time' => $reservation->is_open_time,
+                ];
+            });
 
-        // Use the accessor to get the correct total cost including discounts
-        $totalSpent = $user->reservations->sum('total_cost');
+        // Use the total_cost from mapped reservations
+        $totalSpent = $reservations->sum('total_cost');
         $points = floor($totalSpent / 10); // Example: 1 point for every $10 spent
 
         return Inertia::render('UserManagement/Show', [
             'user' => $user,
+            'reservations' => $reservations,
             'totalSpent' => $totalSpent,
             'points' => $points,
         ]);

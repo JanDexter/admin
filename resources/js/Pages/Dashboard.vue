@@ -20,13 +20,17 @@ const showPaymentModal = ref(false);
 const selectedPayment = ref(null);
 
 const openPaymentModal = (service) => {
+    const calculatedCost = service.hourly_rate * (service.start_time ? Math.max(1, Math.ceil((Date.now() - new Date(service.start_time).getTime()) / (1000 * 60 * 60))) : 1);
     selectedPayment.value = {
         id: service.id,
         customer_name: service.customer_name,
         space_name: service.space_name,
         space_type: service.space_type,
-        total_cost: service.hourly_rate * (service.start_time ? Math.max(1, Math.ceil((Date.now() - new Date(service.start_time).getTime()) / (1000 * 60 * 60))) : 1),
-        cost: service.hourly_rate * (service.start_time ? Math.max(1, Math.ceil((Date.now() - new Date(service.start_time).getTime()) / (1000 * 60 * 60))) : 1),
+        total_cost: calculatedCost,
+        cost: calculatedCost,
+        amount_paid: service.amount_paid || 0,
+        amount_remaining: service.amount_remaining ?? (calculatedCost - (service.amount_paid || 0)),
+        status: service.status,
     };
     showPaymentModal.value = true;
 };

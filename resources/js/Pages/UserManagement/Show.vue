@@ -4,6 +4,7 @@ import { Head, Link } from '@inertiajs/vue3';
 
 const props = defineProps({
     user: Object,
+    reservations: Array,
     totalSpent: Number,
     points: Number,
 });
@@ -17,7 +18,7 @@ const getRoleColor = (role) => {
     return colors[role.toLowerCase()] || 'bg-gray-100 text-gray-800';
 };
 
-const getStatusColor = (isActive) => {
+const getUserStatusColor = (isActive) => {
     return isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
 };
 
@@ -31,13 +32,27 @@ const formatCurrency = (value) => {
 const formatDate = (dateString) => {
     if (!dateString) return '';
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
+    return date.toLocaleDateString('en-PH', { 
+        timeZone: 'Asia/Manila',
         year: 'numeric', 
-        month: 'long', 
+        month: 'short', 
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
     });
+};
+
+const getStatusColor = (status) => {
+    const colors = {
+        paid: 'bg-green-100 text-green-800',
+        completed: 'bg-green-100 text-green-800',
+        partial: 'bg-yellow-100 text-yellow-800',
+        pending: 'bg-orange-100 text-orange-800',
+        active: 'bg-blue-100 text-blue-800',
+        hold: 'bg-purple-100 text-purple-800',
+        cancelled: 'bg-red-100 text-red-800',
+    };
+    return colors[status?.toLowerCase()] || 'bg-gray-100 text-gray-800';
 };
 </script>
 
@@ -108,7 +123,7 @@ const formatDate = (dateString) => {
                                     <div>
                                         <dt class="text-sm font-medium text-gray-500">Status</dt>
                                         <dd class="text-sm text-gray-900">
-                                            <span :class="`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(user.is_active)}`">
+                                            <span :class="`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getUserStatusColor(user.is_active)}`">
                                                 {{ user.is_active ? 'ACTIVE' : 'INACTIVE' }}
                                             </span>
                                         </dd>
@@ -186,11 +201,15 @@ const formatDate = (dateString) => {
                 <!-- Reservation History -->
                 <div class="mt-8 bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6 border-b border-gray-200">
-                        <h3 class="text-lg font-medium text-gray-900">Reservation History</h3>
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Transaction History</h3>
                         <div class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div class="bg-gray-50 p-4 rounded-lg">
                                 <dt class="text-sm font-medium text-gray-500">Total Spent</dt>
                                 <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ formatCurrency(totalSpent) }}</dd>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <dt class="text-sm font-medium text-gray-500">Total Transactions</dt>
+                                <dd class="mt-1 text-2xl font-semibold text-gray-900">{{ reservations?.length || 0 }}</dd>
                             </div>
                             <div class="bg-gray-50 p-4 rounded-lg">
                                 <dt class="text-sm font-medium text-gray-500">Reward Points</dt>
@@ -199,38 +218,47 @@ const formatDate = (dateString) => {
                         </div>
                     </div>
                     <div class="p-6">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-gray-200">
-                                <tr v-for="reservation in user.reservations" :key="reservation.id">
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ reservation.space.space_type.name }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ reservation.customer.company_name }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ formatDate(reservation.created_at) }}</td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full"
-                                                :class="{
-                                                'bg-green-100 text-green-800': reservation.status === 'paid' || reservation.status === 'completed',
-                                                'bg-yellow-100 text-yellow-800': reservation.status === 'hold',
-                                                'bg-red-100 text-red-800': reservation.status === 'cancelled'
-                                                }">
-                                            {{ reservation.status }}
-                                        </span>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ formatCurrency(reservation.total_cost) }}</td>
-                                </tr>
-                                <tr v-if="!user.reservations.length">
-                                    <td colspan="5" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">No reservations found.</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Space</th>
+                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost</th>
+                                        <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    <tr v-for="transaction in reservations" :key="transaction.id" class="hover:bg-gray-50">
+                                        <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{{ transaction.customer_name }}</td>
+                                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                            <div>{{ transaction.space_name }}</div>
+                                            <div class="text-xs text-gray-400">{{ transaction.space_type }}</div>
+                                        </td>
+                                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{{ formatDate(transaction.end_time || transaction.start_time) }}</td>
+                                        <td class="px-4 py-3 whitespace-nowrap">
+                                            <span :class="`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(transaction.status)}`">
+                                                {{ transaction.status?.toUpperCase() }}
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                                            {{ formatCurrency(transaction.cost || 0) }}
+                                        </td>
+                                        <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                            <div>{{ transaction.payment_method?.toUpperCase() || 'N/A' }}</div>
+                                            <div v-if="transaction.amount_paid > 0" class="text-xs" :class="transaction.amount_paid >= transaction.total_cost ? 'text-green-600' : 'text-orange-600'">
+                                                Paid: {{ formatCurrency(transaction.amount_paid) }}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr v-if="!reservations || reservations.length === 0">
+                                        <td colspan="6" class="px-4 py-3 text-center text-sm text-gray-500">No transactions found.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>

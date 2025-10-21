@@ -68,8 +68,7 @@ Route::middleware(['auth', 'can:admin-access'])->prefix($adminPrefix)->group(fun
     Route::post('customers', [CustomerController::class, 'store'])->name('customers.store');
     Route::get('customers/{customer}', [CustomerController::class, 'show'])->name('customers.show');
     Route::get('customers/{customer}/edit', [CustomerController::class, 'edit'])->name('customers.edit');
-    Route::put('customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
-    Route::patch('customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
+    Route::match(['put', 'patch'], 'customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
     
     // Service management routes (Co-workspace reservations)
     Route::resource('services', ServiceController::class);
@@ -82,8 +81,7 @@ Route::middleware(['auth', 'can:admin-access'])->prefix($adminPrefix)->group(fun
         Route::post('user-management', [UserManagementController::class, 'store'])->name('user-management.store');
         Route::get('user-management/{user}', [UserManagementController::class, 'show'])->name('user-management.show');
         Route::get('user-management/{user}/edit', [UserManagementController::class, 'edit'])->name('user-management.edit');
-        Route::put('user-management/{user}', [UserManagementController::class, 'update'])->name('user-management.update');
-        Route::patch('user-management/{user}', [UserManagementController::class, 'update'])->name('user-management.update');
+        Route::match(['put', 'patch'], 'user-management/{user}', [UserManagementController::class, 'update'])->name('user-management.update');
         Route::patch('user-management/{user}/toggle-status', [UserManagementController::class, 'toggleStatus'])->name('user-management.toggle-status');
     });
     

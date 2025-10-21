@@ -13,9 +13,11 @@ class SpaceSeeder extends Seeder
      */
     public function run(): void
     {
-        // Start from a clean slate to avoid duplicates when seeding multiple times
-        Space::query()->delete();
-        SpaceType::query()->delete();
+        // Seed only when empty to prevent destructive changes in production
+        if (SpaceType::query()->exists() || Space::query()->exists()) {
+            // Already seeded; skip to avoid wiping or duplicating data
+            return;
+        }
 
         $defaultSpaceTypes = SpaceType::getDefaultSpaceTypes();
 

@@ -18,13 +18,13 @@ const form = useForm({
 });
 
 const calculatedAmount = computed(() => {
-    if (props.reservation) {
-        // Show remaining amount if there's a partial payment
-        const total = props.reservation.total_cost || props.reservation.cost || 0;
-        const paid = props.reservation.amount_paid || 0;
-        return total - paid;
-    }
-    return 0;
+    if (!props.reservation) return 0;
+    // Prefer backend-provided remaining amount if available
+    const remaining = props.reservation.amount_remaining;
+    if (typeof remaining === 'number') return Math.max(remaining, 0);
+    const total = props.reservation.total_cost || props.reservation.cost || 0;
+    const paid = props.reservation.amount_paid || 0;
+    return Math.max(total - paid, 0);
 });
 
 const amountPaid = computed(() => {

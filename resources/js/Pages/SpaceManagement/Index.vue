@@ -151,29 +151,54 @@ const newCustomerForm = useForm({
     status: 'active',
 });
 
+// Timezone helpers (force Asia/Manila across all clients)
+const PH_OFFSET_MINUTES = 8 * 60; // UTC+8, no DST in PH
+const pad2 = (n) => String(n).padStart(2, '0');
+
 const getRoundedNow = () => {
     const now = new Date();
     now.setSeconds(0, 0);
     return now;
 };
 
+// Convert a Date (point in time) into a datetime-local string in Asia/Manila
 const toLocalDateTimeInput = (date) => {
     if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
     const normalized = new Date(date.getTime());
     normalized.setSeconds(0, 0);
-    const offsetMs = normalized.getTimezoneOffset() * 60000;
-    return new Date(normalized.getTime() - offsetMs).toISOString().slice(0, 16);
+    // Build a UTC timestamp from the Date's UTC components
+    const utcMs = Date.UTC(
+        normalized.getUTCFullYear(),
+        normalized.getUTCMonth(),
+        normalized.getUTCDate(),
+        normalized.getUTCHours(),
+        normalized.getUTCMinutes()
+    );
+    // Shift to PH local time by adding +08:00
+    const phMs = utcMs + PH_OFFSET_MINUTES * 60 * 1000;
+    const ph = new Date(phMs);
+    const y = ph.getUTCFullYear();
+    const m = pad2(ph.getUTCMonth() + 1);
+    const d = pad2(ph.getUTCDate());
+    const hh = pad2(ph.getUTCSeconds() === 60 ? ph.getUTCHours() + 1 : ph.getUTCHours());
+    const mm = pad2(ph.getUTCMinutes());
+    return `${y}-${m}-${d}T${hh}:${mm}`;
 };
 
 const nowLocalDateTime = () => toLocalDateTimeInput(getRoundedNow());
 
+// Given a datetime-local string in PH, add 1 hour and return a new PH datetime-local string
 const computeDefaultEndTime = (startValue) => {
     if (!startValue) return '';
-    const startDate = new Date(startValue);
-    if (Number.isNaN(startDate.getTime())) return '';
-    startDate.setSeconds(0, 0);
-    startDate.setHours(startDate.getHours() + 1);
-    return toLocalDateTimeInput(startDate);
+    const [datePart, timePart] = String(startValue).split('T');
+    if (!datePart || !timePart) return '';
+    const [y, m, d] = datePart.split('-').map((n) => parseInt(n, 10));
+    const [hh, mm] = timePart.split(':').map((n) => parseInt(n, 10));
+    if ([y, m, d, hh, mm].some((v) => Number.isNaN(v))) return '';
+    // Convert PH local to UTC by subtracting 8 hours
+    const utcMs = Date.UTC(y, m - 1, d, hh - 8, mm, 0, 0);
+    const endUtcMs = utcMs + 60 * 60 * 1000; // +1 hour
+    return toLocalDateTimeInput(new Date(endUtcMs));
 };
 
 const getDefaultAssignment = () => {
@@ -491,7 +516,7 @@ const startStartTimeSync = () => {
     if (startTimeSyncId) clearInterval(startTimeSyncId);
     startTimeSyncId = setInterval(() => {
         if (!showCustomerModal.value || startTimeDirty.value) return;
-        const latest = nowLocalDateTime();
+        const latest = nowLocalDateTime(); // already PH localized
         if (assignment.value.start_time !== latest) {
             assignment.value.start_time = latest;
         } else {
@@ -675,25 +700,41 @@ const releaseSpace = (spaceId) => {
 };
 
 const openPaymentForSpace = (space) => {
-    // Find the active reservation for this space
-    const reservation = {
-        id: space.id,
-        customer_name: space.current_customer?.company_name || space.current_customer?.name,
+    // Prefer the active reservation attached by the backend
+    const active = space.active_reservation || null;
+    if (active) {
+        selectedPaymentSpace.value = {
+            id: active.id, // real reservation id
+            total_cost: active.total_cost ?? active.cost ?? 0,
+            cost: active.cost ?? active.total_cost ?? 0,
+            amount_paid: active.amount_paid ?? 0,
+            amount_remaining: active.amount_remaining ?? Math.max((active.total_cost ?? 0) - (active.amount_paid ?? 0), 0),
+            status: active.status,
+            space_name: space.name,
+            space_type: props.spaceTypes.find(st => st.spaces.some(s => s.id === space.id))?.name,
+        };
+        showPaymentModal.value = true;
+        return;
+    }
+
+    // Fallback: estimate a temporary reservation payload
+    const est = {
+        id: space.id, // not ideal, but allows modal to open
         space_name: space.name,
         space_type: props.spaceTypes.find(st => st.spaces.some(s => s.id === space.id))?.name,
-        total_cost: 0, // Will be calculated based on time
+        total_cost: 0,
         cost: 0,
+        amount_paid: 0,
+        amount_remaining: 0,
     };
-    
-    // Calculate estimated cost based on time elapsed
     if (space.occupied_from) {
         const hours = Math.max(1, Math.floor((Date.now() - new Date(space.occupied_from).getTime()) / (1000 * 60 * 60)));
         const rate = space.hourly_rate || props.spaceTypes.find(st => st.spaces.some(s => s.id === space.id))?.hourly_rate || 0;
-        reservation.total_cost = hours * rate;
-        reservation.cost = hours * rate;
+        est.total_cost = hours * rate;
+        est.cost = est.total_cost;
+        est.amount_remaining = est.total_cost;
     }
-    
-    selectedPaymentSpace.value = reservation;
+    selectedPaymentSpace.value = est;
     showPaymentModal.value = true;
 };
 
