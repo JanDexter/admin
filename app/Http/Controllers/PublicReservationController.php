@@ -9,18 +9,35 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class PublicReservationController extends Controller
 {
+    /**
+     * Allow start times that are effectively "now", with a small grace window for rounding.
+     */
+    protected function assertStartTimeIsNotTooFarInThePast(Carbon $startTime): void
+    {
+        $graceWindow = Carbon::now(config('app.timezone'))
+            ->subMinutes(1);
+
+        if ($startTime->lt($graceWindow)) {
+            throw ValidationException::withMessages([
+                'start_time' => 'The start time must be a date after or equal to now.',
+            ]);
+        }
+    }
+
     public function checkAvailability(Request $request)
     {
         $validated = $request->validate([
-            'start_time' => 'required|date|after_or_equal:now',
+            'start_time' => 'required|date',
             'hours' => 'required|integer|min:1|max:12',
             'pax' => 'nullable|integer|min:1|max:20',
         ]);
 
-        $startTime = Carbon::parse($validated['start_time']);
+        $startTime = Carbon::parse($validated['start_time'], config('app.timezone'));
+        $this->assertStartTimeIsNotTooFarInThePast($startTime);
         $endTime = (clone $startTime)->addHours($validated['hours']);
         $requestedPax = $validated['pax'] ?? 1;
 
@@ -60,7 +77,7 @@ class PublicReservationController extends Controller
             'customer_email' => 'required|email|max:255',
             'customer_phone' => 'required|string|max:20',
             'customer_company_name' => 'nullable|string|max:255',
-            'start_time' => 'nullable|date|after_or_equal:now',
+            'start_time' => 'nullable|date',
         ]);
 
         $spaceType = SpaceType::findOrFail($validated['space_type_id']);
@@ -72,8 +89,9 @@ class PublicReservationController extends Controller
         $pax = $validated['pax'] ?? 1;
 
         $startTime = isset($validated['start_time']) 
-            ? Carbon::parse($validated['start_time']) 
-            : Carbon::now();
+            ? Carbon::parse($validated['start_time'], config('app.timezone')) 
+            : Carbon::now(config('app.timezone'));
+        $this->assertStartTimeIsNotTooFarInThePast($startTime);
         $endTime = (clone $startTime)->addHours($hours);
 
     // Check available capacity using the same logic as the availability check endpoint

@@ -88,53 +88,60 @@ class SpaceManagementController extends Controller
             $spaceType->unassigned_reservations = $unassignedReservations->values();
         });
 
-        // Get all active customers (normalize to plain arrays to avoid mixing models and arrays)
-        $customers = Customer::where('status', 'active')
-            ->select('id', 'name', 'company_name', 'contact_person', 'email', 'phone', 'user_id')
-            ->orderByRaw("
-                COALESCE(
-                    NULLIF(name, ''),
-                    NULLIF(company_name, ''),
-                    NULLIF(contact_person, ''),
-                    email
-                ) ASC
-            ")
+        // Build a fully flattened customer/user list for the frontend selector
+        $customerRecords = Customer::with('user')
+            ->where('status', 'active')
+            ->orderBy('name')
             ->get()
-            ->map(function ($c) {
+            ->map(function (Customer $customer) {
                 return [
-                    'id' => $c->id,
-                    'user_id' => $c->user_id,
-                    'name' => $c->name,
-                    'company_name' => $c->company_name,
-                    'contact_person' => $c->contact_person,
-                    'email' => $c->email,
-                    'phone' => $c->phone,
+                    'id' => (string) $customer->getKey(),
+                    'display_name' => $customer->name ?: ($customer->company_name ?: $customer->email),
+                    'name' => $customer->name,
+                    'company_name' => $customer->company_name,
+                    'contact_person' => $customer->contact_person,
+                    'email' => $customer->email,
+                    'phone' => $customer->phone,
+                    'user_id' => optional($customer->user)->getKey(),
                     'is_user_only' => false,
                 ];
             });
 
-        // Get all users who don't have a customer record yet
-        $existingUserIds = $customers->pluck('user_id')->filter();
-        $usersWithoutCustomer = User::whereNotIn('id', $existingUserIds)
+        $existingUserIds = $customerRecords
+            ->pluck('user_id')
+            ->filter()
+            ->all();
+
+        $userOnlyRecords = User::query()
             ->where('is_active', true)
-            ->select('id', 'name', 'email', 'phone')
+            ->when(!empty($existingUserIds), function ($query) use ($existingUserIds) {
+                $query->whereNotIn('id', $existingUserIds);
+            })
+            ->orderBy('name')
             ->get()
-            ->map(function($user) {
-                // Transform users to match customer structure
+            ->map(function (User $user) {
                 return [
-                    'id' => 'user_' . $user->id, // Prefix with 'user_' to distinguish
-                    'user_id' => $user->id,
+                    'id' => 'user_' . $user->getKey(),
+                    'display_name' => $user->name ?: $user->email,
                     'name' => $user->name,
                     'company_name' => null,
                     'contact_person' => null,
                     'email' => $user->email,
                     'phone' => $user->phone,
-                    'is_user_only' => true, // Flag to identify user-only records
+                    'user_id' => $user->getKey(),
+                    'is_user_only' => true,
                 ];
             });
 
-        // Combine customers and users
-        $allCustomers = $customers->merge($usersWithoutCustomer)->values();
+        $allCustomers = $customerRecords
+            ->merge($userOnlyRecords)
+            ->sortBy('display_name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->map(function (array $customer) {
+                unset($customer['display_name']);
+                return $customer;
+            })
+            ->all();
 
         return Inertia::render('SpaceManagement/Index', [
             'spaceTypes' => $spaceTypes,
