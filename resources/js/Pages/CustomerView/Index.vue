@@ -7,6 +7,7 @@ import gcashLogo from '../../../img/customer_view/GCash_logo.svg';
 import mayaLogo from '../../../img/customer_view/Maya_logo.svg';
 import SpaceCalendar from '../../Components/SpaceCalendar.vue';
 import ReservationDetailModal from '../../Components/ReservationDetailModal.vue';
+import { offlineStorage } from '../../utils/offlineStorage';
 // Removed payment logos; availability card no longer shown
 
 // Utility: slugify labels consistently
@@ -144,6 +145,39 @@ onMounted(() => {
         document.addEventListener('visibilitychange', handleVisibilityChange);
     }
 
+    // PWA: Monitor online/offline status
+    if (typeof window !== 'undefined') {
+        window.addEventListener('online', handleOnlineStatus);
+        window.addEventListener('offline', handleOnlineStatus);
+        
+        // Check initial online status
+        isOnline.value = navigator.onLine;
+    }
+
+    // PWA: Restore saved WiFi credentials and timer from offline storage
+    try {
+        const savedWifi = offlineStorage.getWiFiCredentials();
+        if (savedWifi && savedWifi.expiresAt && new Date(savedWifi.expiresAt) > new Date()) {
+            wifiCredentials.value = savedWifi;
+        }
+        
+        const savedTimer = offlineStorage.getTimerState();
+        if (savedTimer && savedTimer.endTime && new Date(savedTimer.endTime) > new Date()) {
+            // Restore timer for active reservation
+            const mockReservation = {
+                id: savedTimer.reservationId,
+                start_time: savedTimer.startTime,
+                end_time: savedTimer.endTime,
+            };
+            startReservationTimer(mockReservation);
+        }
+        
+        // Cleanup any expired data
+        offlineStorage.cleanupExpired();
+    } catch (error) {
+        console.error('Failed to restore offline data:', error);
+    }
+
     // Equal-height cards: recompute on mount and on resize
     if (typeof window !== 'undefined') {
         recomputeCardHeights();
@@ -178,6 +212,12 @@ onBeforeUnmount(() => {
 
     if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    // PWA: Remove online/offline listeners
+    if (typeof window !== 'undefined') {
+        window.removeEventListener('online', handleOnlineStatus);
+        window.removeEventListener('offline', handleOnlineStatus);
     }
 
     if (typeof window !== 'undefined') {
@@ -895,25 +935,64 @@ const generateWiFiCredentials = (reservationId) => {
     const username = `user_${reservationId}_${timestamp.toString().slice(-6)}`;
     const password = btoa(`${reservationId}${timestamp}`).slice(0, 12).toUpperCase();
     
-    return {
+    const credentials = {
         ssid,
         username,
         password,
         expiresAt: null, // Will be set based on reservation end time
     };
+    
+    // Save to offline storage for PWA
+    offlineStorage.saveWiFiCredentials(credentials);
+    
+    return credentials;
 };
 
 const wifiCredentials = ref(null);
 const reservationTimer = ref(null);
 const timerInterval = ref(null);
+const isOnline = ref(navigator.onLine);
+
+// Monitor online/offline status
+const handleOnlineStatus = () => {
+    isOnline.value = navigator.onLine;
+    
+    if (isOnline.value) {
+        showToast('✅ Back online!', 'success', 2000);
+        // Cleanup expired offline data when back online
+        offlineStorage.cleanupExpired();
+    } else {
+        showToast('⚠️ You are offline. Saved data is still available.', 'warning', 4000);
+    }
+};
 
 const startReservationTimer = (reservation) => {
     if (!reservation || !reservation.start_time) return;
+    
+    // Save reservation data for offline access
+    offlineStorage.saveReservation({
+        id: reservation.id,
+        space_name: reservation.space_name,
+        start_time: reservation.start_time,
+        end_time: reservation.end_time,
+        status: reservation.status,
+        total_price: reservation.total_price,
+        payment_method: reservation.payment_method,
+    });
     
     const updateTimer = () => {
         const now = new Date();
         const start = new Date(reservation.start_time);
         const end = reservation.end_time ? new Date(reservation.end_time) : null;
+        
+        // Save timer state for offline continuity
+        if (end) {
+            offlineStorage.saveTimerState({
+                reservationId: reservation.id,
+                startTime: start.toISOString(),
+                endTime: end.toISOString(),
+            });
+        }
         
         // Check if reservation has started
         if (now >= start) {
@@ -921,6 +1000,8 @@ const startReservationTimer = (reservation) => {
                 wifiCredentials.value = generateWiFiCredentials(reservation.id);
                 if (end) {
                     wifiCredentials.value.expiresAt = end;
+                    // Update offline storage with expiry
+                    offlineStorage.saveWiFiCredentials(wifiCredentials.value);
                 }
             }
             
@@ -943,6 +1024,10 @@ const startReservationTimer = (reservation) => {
                         clearInterval(timerInterval.value);
                         timerInterval.value = null;
                     }
+                    // Clear expired data
+                    offlineStorage.clearWiFiCredentials();
+                    offlineStorage.clearReservation();
+                    offlineStorage.clearTimerState();
                 }
             }
         } else {
@@ -1604,6 +1689,13 @@ const copyToClipboard = async (text, label = 'Text') => {
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
                                             </svg>
                                             <p class="text-sm font-bold text-blue-900">WiFi Access Credentials</p>
+                                            <!-- PWA: Offline indicator -->
+                                            <span v-if="!isOnline" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+                                                </svg>
+                                                Offline
+                                            </span>
                                         </div>
                                         <div v-if="reservationTimer.started" class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-mono font-bold">
                                             {{ String(reservationTimer.hours).padStart(2, '0') }}:{{ String(reservationTimer.minutes).padStart(2, '0') }}:{{ String(reservationTimer.seconds).padStart(2, '0') }}
@@ -1611,6 +1703,16 @@ const copyToClipboard = async (text, label = 'Text') => {
                                         <div v-else class="bg-amber-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
                                             Starts in {{ String(reservationTimer.hours).padStart(2, '0') }}:{{ String(reservationTimer.minutes).padStart(2, '0') }}:{{ String(reservationTimer.seconds).padStart(2, '0') }}
                                         </div>
+                                    </div>
+                                    
+                                    <!-- PWA: Offline notice -->
+                                    <div v-if="!isOnline" class="bg-amber-50 border border-amber-200 rounded-lg p-3 flex gap-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <p class="text-xs text-amber-800">
+                                            <strong>You're offline.</strong> Your credentials are saved and will remain available when you reconnect.
+                                        </p>
                                     </div>
                                     
                                     <div v-if="reservationTimer.started" class="space-y-2">
@@ -1633,7 +1735,7 @@ const copyToClipboard = async (text, label = 'Text') => {
                                                 <button @click="copyToClipboard(wifiCredentials.username, 'Username')" class="text-blue-600 hover:text-blue-800">
                                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2 2v1"></path>
                                                     </svg>
                                                 </button>
                                             </div>
@@ -1646,7 +1748,7 @@ const copyToClipboard = async (text, label = 'Text') => {
                                                 <button @click="copyToClipboard(wifiCredentials.password, 'Password')" class="text-blue-600 hover:text-blue-800">
                                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2 2v1"></path>
                                                     </svg>
                                                 </button>
                                             </div>

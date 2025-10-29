@@ -1,15 +1,16 @@
 {
-  "name": "Customer Management Dashboard",
-  "short_name": "CustomerDash",
-  "description": "A modern customer management dashboard",
-  "start_url": "/coz-control/dashboard",
+  "name": "CO-Z Co-Workspace & Study Hub",
+  "short_name": "CO-Z",
+  "description": "Book and manage co-workspace reservations at CO-Z. Access WiFi credentials offline.",
+  "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#3b82f6",
+  "background_color": "#eef3ff",
+  "theme_color": "#2f4686",
   "orientation": "portrait-primary",
   "scope": "/",
   "lang": "en",
-  "categories": ["business", "productivity"],
+  "categories": ["business", "productivity", "lifestyle"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icons/icon-72x72.png",
@@ -62,25 +63,38 @@
   ],
   "shortcuts": [
     {
+      "name": "Book Space",
+      "short_name": "Book",
+      "description": "Book a co-workspace",
+      "url": "/",
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "My Reservations",
+      "short_name": "Reservations",
+      "description": "View my reservations",
+      "url": "/#reservations",
+      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
+    },
+    {
       "name": "Dashboard",
       "short_name": "Dashboard",
-      "description": "Go to customer dashboard",
-  "url": "/coz-control/dashboard",
-      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Customers",
-      "short_name": "Customers",
-      "description": "Manage customers",
-  "url": "/coz-control/customers",
-      "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Add Customer",
-      "short_name": "Add Customer",
-      "description": "Add new customer",
-  "url": "/coz-control/customers/create",
+      "description": "Go to admin dashboard",
+      "url": "/coz-control/dashboard",
       "icons": [{ "src": "/icons/icon-192x192.png", "sizes": "192x192" }]
     }
-  ]
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "display_override": ["window-controls-overlay", "standalone"],
+  "edge_side_panel": {
+    "preferred_width": 400
+  }
 }

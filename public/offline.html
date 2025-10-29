@@ -3,38 +3,296 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Offline - Admin Dashboard</title>
-    <link rel="stylesheet" href="/build/assets/app.css">
+    <title>Offline - CO-Z Co-Workspace</title>
+    <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg">
     <style>
-        .offline-container {
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #eef3ff 0%, #d4e3ff 100%);
+            min-height: 100vh;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
-            padding: 2rem;
+            padding: 1rem;
+        }
+        .offline-container {
+            max-width: 500px;
+            width: 100%;
+            background: white;
+            border-radius: 1.5rem;
+            padding: 2.5rem;
             text-align: center;
+            box-shadow: 0 20px 60px rgba(47, 70, 134, 0.15);
         }
         .offline-icon {
             width: 120px;
             height: 120px;
-            margin-bottom: 2rem;
-            opacity: 0.5;
+            margin: 0 auto 1.5rem;
+            opacity: 0.8;
+            animation: pulse 2s infinite;
         }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 0.5; }
+        }
+        h1 {
+            color: #2f4686;
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+        .message {
+            color: #64748b;
+            font-size: 1rem;
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+        }
+        .saved-data-section {
+            background: #f1f5f9;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            text-align: left;
+        }
+        .saved-data-title {
+            font-weight: 600;
+            color: #2f4686;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+        .data-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem;
+            background: white;
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .data-label {
+            color: #64748b;
+            font-size: 0.875rem;
+        }
+        .data-value {
+            color: #1e293b;
+            font-weight: 600;
+            font-family: 'Courier New', monospace;
+        }
+        .button-group {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        button {
+            flex: 1;
+            min-width: 140px;
+            padding: 0.875rem 1.5rem;
+            border: none;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #2f4686;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #243761;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(47, 70, 134, 0.3);
+        }
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #2f4686;
+        }
+        .btn-secondary:hover {
+            background: #cbd5e1;
+        }
+        .connection-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            font-size: 0.875rem;
+            margin-top: 1rem;
+            font-weight: 500;
+        }
+        .status-offline {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .status-online {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: blink 1.5s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .hidden { display: none !important; }
     </style>
 </head>
-<body class="bg-gray-100">
+<body>
     <div class="offline-container">
-        <svg class="offline-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-12.728 12.728m0-12.728l12.728 12.728M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2z"/>
+        <svg class="offline-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
         </svg>
-        <h1 class="text-3xl font-bold text-gray-800 mb-4">You're Offline</h1>
-        <p class="text-gray-600 mb-6 max-w-md">
-            It looks like you're not connected to the internet. Please check your connection and try again.
+        
+        <h1>You're Offline</h1>
+        <p class="message">
+            No internet connection detected. Some features may be limited, but you can still view your saved reservation details below.
         </p>
-        <button onclick="window.location.reload()" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-            Try Again
-        </button>
+
+        <div class="connection-status status-offline" id="connectionStatus">
+            <span class="status-dot"></span>
+            <span id="statusText">Offline</span>
+        </div>
+
+        <!-- Saved WiFi Credentials Section -->
+        <div class="saved-data-section hidden" id="wifiSection">
+            <div class="saved-data-title">📶 Saved WiFi Credentials</div>
+            <div class="data-item">
+                <span class="data-label">Network (SSID)</span>
+                <span class="data-value" id="wifiSSID">-</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">Username</span>
+                <span class="data-value" id="wifiUsername">-</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">Password</span>
+                <span class="data-value" id="wifiPassword">-</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">Valid Until</span>
+                <span class="data-value" id="wifiExpiry">-</span>
+            </div>
+        </div>
+
+        <!-- Saved Reservation Section -->
+        <div class="saved-data-section hidden" id="reservationSection">
+            <div class="saved-data-title">🎫 Saved Reservation</div>
+            <div class="data-item">
+                <span class="data-label">Space</span>
+                <span class="data-value" id="spaceName">-</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">Start Time</span>
+                <span class="data-value" id="startTime">-</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">End Time</span>
+                <span class="data-value" id="endTime">-</span>
+            </div>
+            <div class="data-item">
+                <span class="data-label">Status</span>
+                <span class="data-value" id="status">-</span>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button class="btn-primary" onclick="retryConnection()">Try Again</button>
+            <button class="btn-secondary" onclick="goHome()">Go to Home</button>
+        </div>
     </div>
+
+    <script>
+        // Check for saved offline data
+        function loadOfflineData() {
+            try {
+                // Load WiFi credentials
+                const wifiData = localStorage.getItem('coz_offline_wifi_credentials');
+                if (wifiData) {
+                    const wifi = JSON.parse(wifiData);
+                    const wifiSection = document.getElementById('wifiSection');
+                    
+                    // Check if expired
+                    if (!wifi.expiresAt || new Date(wifi.expiresAt) > new Date()) {
+                        document.getElementById('wifiSSID').textContent = wifi.ssid || '-';
+                        document.getElementById('wifiUsername').textContent = wifi.username || '-';
+                        document.getElementById('wifiPassword').textContent = wifi.password || '-';
+                        document.getElementById('wifiExpiry').textContent = wifi.expiresAt 
+                            ? new Date(wifi.expiresAt).toLocaleString() 
+                            : 'No expiry';
+                        wifiSection.classList.remove('hidden');
+                    }
+                }
+
+                // Load reservation data
+                const reservationData = localStorage.getItem('coz_offline_reservation_data');
+                if (reservationData) {
+                    const reservation = JSON.parse(reservationData);
+                    const reservationSection = document.getElementById('reservationSection');
+                    
+                    // Check if expired
+                    if (!reservation.expires_at || new Date(reservation.expires_at) > new Date()) {
+                        document.getElementById('spaceName').textContent = reservation.space_name || '-';
+                        document.getElementById('startTime').textContent = reservation.start_time 
+                            ? new Date(reservation.start_time).toLocaleString() 
+                            : '-';
+                        document.getElementById('endTime').textContent = reservation.end_time 
+                            ? new Date(reservation.end_time).toLocaleString() 
+                            : '-';
+                        document.getElementById('status').textContent = reservation.status || '-';
+                        reservationSection.classList.remove('hidden');
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load offline data:', error);
+            }
+        }
+
+        // Monitor online/offline status
+        function updateConnectionStatus() {
+            const status = document.getElementById('connectionStatus');
+            const statusText = document.getElementById('statusText');
+            
+            if (navigator.onLine) {
+                status.className = 'connection-status status-online';
+                statusText.textContent = 'Back Online!';
+                
+                // Auto-retry after 2 seconds
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            } else {
+                status.className = 'connection-status status-offline';
+                statusText.textContent = 'Offline';
+            }
+        }
+
+        function retryConnection() {
+            if (navigator.onLine) {
+                window.location.reload();
+            } else {
+                alert('Still offline. Please check your internet connection.');
+            }
+        }
+
+        function goHome() {
+            window.location.href = '/';
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            loadOfflineData();
+            updateConnectionStatus();
+        });
+
+        // Listen for connection changes
+        window.addEventListener('online', updateConnectionStatus);
+        window.addEventListener('offline', updateConnectionStatus);
+    </script>
 </body>
 </html>

@@ -19,15 +19,16 @@
         <meta name="theme-color" content="#3b82f6">
 
         <!-- PWA Icons -->
+        <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg">
+        <link rel="alternate icon" type="image/png" sizes="32x32" href="/icons/icon-32x32.png">
+        <link rel="alternate icon" type="image/png" sizes="16x16" href="/icons/icon-16x16.png">
         <link rel="apple-touch-icon" href="/icons/icon-152x152.png">
         <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png">
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192x192.png">
         <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-192x192.png">
-        <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32x32.png">
-        <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16x16.png">
         <link rel="manifest" href="/manifest.json">
-        <link rel="mask-icon" href="/icons/safari-pinned-tab.svg" color="#3b82f6">
-        <link rel="shortcut icon" href="/favicon.ico">
+        <link rel="mask-icon" href="/icons/favicon.svg" color="#2f4686">
+        <link rel="shortcut icon" href="/icons/favicon.svg">
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
@@ -41,26 +42,51 @@
     <body class="font-sans antialiased">
         @inertia
 
-        <!-- PWA Install Prompt - Temporarily Disabled -->
-        <!-- <div id="pwa-install-prompt" class="hidden fixed bottom-4 left-4 right-4 bg-blue-600 text-white p-4 rounded-lg shadow-lg z-50" style="display:none">...</div> -->
-
-        <!-- Service Worker Registration - Temporarily Disabled -->
+        <!-- Service Worker Registration -->
         <script>
-            // Temporarily disable service worker to troubleshoot loading issues
-            // if ('serviceWorker' in navigator) {
-            //     window.addEventListener('load', function() {
-            //         navigator.serviceWorker.register('/sw.js')
-            //             .then(function(registration) {
-            //                 console.log('ServiceWorker registration successful');
-            //             })
-            //             .catch(function(err) {
-            //                 console.log('ServiceWorker registration failed: ', err);
-            //             });
-            //     });
-            // }
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                    navigator.serviceWorker.register('/sw.js')
+                        .then(function(registration) {
+                            console.log('✅ ServiceWorker registered successfully');
+                            
+                            // Check for updates
+                            registration.addEventListener('updatefound', () => {
+                                const newWorker = registration.installing;
+                                newWorker.addEventListener('statechange', () => {
+                                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                        console.log('🔄 New content available, please refresh.');
+                                        // Could show a toast or prompt here
+                                    }
+                                });
+                            });
+                        })
+                        .catch(function(err) {
+                            console.log('❌ ServiceWorker registration failed:', err);
+                        });
+                });
 
-            // PWA Install Prompt - Temporarily Disabled
-            console.log('App loaded - checking for JavaScript errors');
+                // Listen for messages from service worker
+                navigator.serviceWorker.addEventListener('message', event => {
+                    if (event.data && event.data.type === 'UPDATE_ACTIVE_RESERVATIONS') {
+                        console.log('📡 Background sync: updating active reservations');
+                    }
+                });
+            }
+
+            // PWA Install Prompt
+            let deferredPrompt;
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredPrompt = e;
+                console.log('💾 PWA install prompt available');
+                // Could show custom install button here
+            });
+
+            window.addEventListener('appinstalled', () => {
+                console.log('✅ PWA installed successfully');
+                deferredPrompt = null;
+            });
         </script>
     </body>
 </html>
