@@ -2,9 +2,52 @@
 
 A modern, full-featured web application built with Laravel 11, Inertia.js, and Vue.js for comprehensive customer relationship management. This application provides a streamlined admin interface focused on customer data management and co-workspace service reservations.
 
-## Preview
-![Customer Management Dashboard Preview 1](public/img/Screenshot%202025-08-07%20105409.png)
-![Customer Management Dashboard Preview 2](public/img/Screenshot%202025-08-07%20105413.png)
+## 🏁 Final Stack & Modules
+
+### Backend
+- **Laravel 11** (PHP 8.2+)
+- **Database:** MySQL 8.0+ (default), SQLite (testing), Redis (cache/queue/session)
+- **Composer Packages:**
+  - `laravel/framework` (core)
+  - `inertiajs/inertia-laravel` (SPA bridge)
+  - `laravel/sanctum` (API authentication)
+  - `laravel/socialite` (OAuth, Google login)
+  - `maatwebsite/excel` (Excel import/export)
+  - `pragmarx/google2fa-laravel` (2FA)
+  - `tightenco/ziggy` (route helper)
+  - `laravel/tinker` (REPL)
+  - **Dev:** `laravel/breeze` (auth scaffolding), `laravel/pint` (code style), `phpunit/phpunit` (testing), `mockery/mockery`, `nunomaduro/collision`, `fakerphp/faker`, `laravel/sail`, `laravel/pail`
+
+### Frontend
+- **Vue.js 3** (SPA)
+- **Inertia.js** (Laravel-Vue bridge)
+- **Vite** (build tool)
+- **Tailwind CSS** (styling)
+- **FullCalendar** (calendar integration)
+- **PWA:** Service Worker, Manifest, Push Notifications, Offline Support
+
+### PHP Modules Required
+- `pdo_mysql` (MySQL)
+- `mbstring` (multibyte string)
+- `exif` (image handling)
+- `pcntl` (process control)
+- `bcmath` (arithmetic)
+- `gd` (image processing)
+
+### Feature Modules
+- **User Management:** Admin, Staff, Customer roles; Google OAuth; 2FA
+- **Customer Management:** CRUD, company/contact standardization, points system
+- **Space Management:** Real-time status, dynamic pricing, bulk operations
+- **Reservation System:** Calendar, history, cost calculation
+- **Service Management:** Service types, auto-assignment, Excel import/export
+- **Dashboard:** Statistics, recent activity, space overview
+- **PWA:** Installable, offline, push notifications
+- **Security:** Single admin registration, role-based access, public registration lock
+
+---
+
+*See below for full details on each module and technology. For troubleshooting, see the dedicated section. For developer setup, see `README-devs.md`.*
+
 
 ## 🚀 About This Project
 
@@ -25,7 +68,6 @@ This project is a Customer Management Dashboard. It provides a comprehensive int
 *   **Calendar View:** FullCalendar integration showing all space occupancy with detailed hover tooltips.
 *   **Space Overview:** Color-coded grid view of all spaces with availability status.
 *   **Dynamic Pricing:** Configurable hourly rates and discount systems per space type.
-*   **Points System:** Customer reward points based on spending history.
 
 ### User Experience
 *   **Real-time Updates:** Countdown timers on occupied spaces showing time until release.

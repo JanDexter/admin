@@ -105,7 +105,7 @@ class CalendarController extends Controller
             case 'active':
             case 'confirmed':
                 return '#3B82F6'; // Blue 500
-            case 'hold':
+            case 'on_hold':
             case 'pending':
                 return '#F59E0B'; // Amber 500
             case 'cancelled':

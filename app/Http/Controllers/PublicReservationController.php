@@ -179,7 +179,7 @@ class PublicReservationController extends Controller
                 'payment_method' => $validated['payment_method'],
                 'hours' => $hours,
                 'pax' => $pax,
-                'status' => $validated['payment_method'] === 'cash' ? 'hold' : 'paid',
+                'status' => $validated['payment_method'] === 'cash' ? 'on_hold' : 'paid',
                 'hold_until' => $validated['payment_method'] === 'cash' ? Carbon::now()->addHour() : null,
                 'notes' => $validated['notes'] ?? null,
                 'start_time' => $startTime,
@@ -303,7 +303,7 @@ class PublicReservationController extends Controller
         }
 
         // Only allow canceling pending, on_hold, or confirmed reservations
-        if (!in_array($reservation->status, ['pending', 'on_hold', 'confirmed', 'hold', 'paid'])) {
+        if (!in_array($reservation->status, ['pending', 'on_hold', 'confirmed', 'paid'])) {
             return redirect()
                 ->back()
                 ->with('error', 'Only pending, on-hold, or active reservations can be cancelled.');

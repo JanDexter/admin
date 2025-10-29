@@ -166,6 +166,16 @@ onBeforeUnmount(() => {
         currentTimeTimer = undefined;
     }
 
+    if (toastTimerId) {
+        clearTimeout(toastTimerId);
+        toastTimerId = null;
+    }
+
+    if (timerInterval.value) {
+        clearInterval(timerInterval.value);
+        timerInterval.value = null;
+    }
+
     if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
     }
@@ -392,9 +402,20 @@ const availabilitySummary = computed(() => {
     };
 });
 
+// Toast notifications
+const toast = ref({ show: false, type: 'success', message: '' });
+let toastTimerId = null;
+const showToast = (message, type = 'success', duration = 3000) => {
+    toast.value = { show: true, type, message };
+    if (toastTimerId) clearTimeout(toastTimerId);
+    toastTimerId = setTimeout(() => { toast.value.show = false; }, duration);
+};
+
 // Booking selection and availability gating
-const bookingDate = ref(''); // YYYY-MM-DD
-const bookingStart = ref(''); // HH:MM (24h)
+// Initialize with current Manila time
+const initialManilaTime = getManilaNow();
+const bookingDate = ref(initialManilaTime.date); // YYYY-MM-DD
+const bookingStart = ref(initialManilaTime.time); // HH:MM (24h)
 const bookingHours = ref(1); // duration in hours
 const bookingPax = ref(1);
 const showAvailability = ref(false);
@@ -511,11 +532,11 @@ const checkAvailability = async () => {
         console.error('Error checking availability:', error);
         if (error.response?.data?.errors) {
             const firstError = Object.values(error.response.data.errors)[0];
-            alert(Array.isArray(firstError) ? firstError[0] : firstError);
+            showToast(Array.isArray(firstError) ? firstError[0] : firstError, 'error', 5000);
         } else if (error.response?.data?.message) {
-            alert(error.response.data.message);
+            showToast(error.response.data.message, 'error', 5000);
         } else {
-            alert('Failed to check availability. Please try again.');
+            showToast('Failed to check availability. Please try again.', 'error', 5000);
         }
     } finally {
         isCheckingAvailability.value = false;
@@ -614,6 +635,12 @@ const openPayment = (space) => {
 
 const closePayment = () => {
     showPaymentModal.value = false;
+    wifiCredentials.value = null;
+    reservationTimer.value = null;
+    if (timerInterval.value) {
+        clearInterval(timerInterval.value);
+        timerInterval.value = null;
+    }
 };
 
 const closeAuthPrompt = () => {
@@ -689,6 +716,16 @@ const confirmPayment = () => {
         paymentStatus.value = { type: 'success' };
         paymentStep.value = 3;
         
+        // Generate WiFi credentials and start timer for immediate reservations
+        const mockReservation = {
+            id: Date.now(), // Mock ID
+            start_time: startTime || new Date().toISOString(),
+            end_time: startTime 
+                ? new Date(new Date(startTime).getTime() + (Number(bookingHours.value || 1) * 60 * 60 * 1000)).toISOString()
+                : new Date(Date.now() + (Number(bookingHours.value || 1) * 60 * 60 * 1000)).toISOString(),
+        };
+        startReservationTimer(mockReservation);
+        
         // Still send to backend for record keeping
         const payload = {
             space_type_id: selectedSpace.value.id,
@@ -708,14 +745,22 @@ const confirmPayment = () => {
         router.post(route('public.reservations.store'), payload, {
             preserveScroll: true,
             preserveState: true,
+            onSuccess: (page) => {
+                // Update with real reservation data if available
+                const reservation = page.props?.reservationCreated;
+                if (reservation) {
+                    mockReservation.id = reservation.id;
+                    wifiCredentials.value = generateWiFiCredentials(reservation.id);
+                }
+            },
             onError: (errors) => {
                 // Show error if booking fails
                 paymentStatus.value = null;
                 paymentStep.value = 1;
                 if (errors.space_type_id) {
-                    alert(errors.space_type_id);
+                    showToast(errors.space_type_id, 'error', 5000);
                 } else {
-                    alert('Failed to create reservation. Please try again.');
+                    showToast('Failed to create reservation. Please try again.', 'error', 5000);
                 }
             },
         });
@@ -748,7 +793,7 @@ const confirmPayment = () => {
             paymentStatus.value = { type: 'hold' };
             paymentStep.value = 3;
             if (errors.space_type_id) {
-                alert(errors.space_type_id);
+                showToast(errors.space_type_id, 'error', 5000);
             }
         }
     });
@@ -840,6 +885,96 @@ const closeReservationDetail = () => {
 
 const refreshReservations = () => {
     router.reload({ only: ['reservations'] });
+};
+
+// WiFi Credentials Generator
+const generateWiFiCredentials = (reservationId) => {
+    // Generate mock credentials based on reservation ID and timestamp
+    const timestamp = Date.now();
+    const ssid = 'COZ-WORKSPACE';
+    const username = `user_${reservationId}_${timestamp.toString().slice(-6)}`;
+    const password = btoa(`${reservationId}${timestamp}`).slice(0, 12).toUpperCase();
+    
+    return {
+        ssid,
+        username,
+        password,
+        expiresAt: null, // Will be set based on reservation end time
+    };
+};
+
+const wifiCredentials = ref(null);
+const reservationTimer = ref(null);
+const timerInterval = ref(null);
+
+const startReservationTimer = (reservation) => {
+    if (!reservation || !reservation.start_time) return;
+    
+    const updateTimer = () => {
+        const now = new Date();
+        const start = new Date(reservation.start_time);
+        const end = reservation.end_time ? new Date(reservation.end_time) : null;
+        
+        // Check if reservation has started
+        if (now >= start) {
+            if (!wifiCredentials.value) {
+                wifiCredentials.value = generateWiFiCredentials(reservation.id);
+                if (end) {
+                    wifiCredentials.value.expiresAt = end;
+                }
+            }
+            
+            if (end) {
+                const timeRemaining = end - now;
+                if (timeRemaining > 0) {
+                    const hours = Math.floor(timeRemaining / (1000 * 60 * 60));
+                    const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+                    const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
+                    reservationTimer.value = {
+                        hours,
+                        minutes,
+                        seconds,
+                        total: timeRemaining,
+                        started: true,
+                    };
+                } else {
+                    reservationTimer.value = { hours: 0, minutes: 0, seconds: 0, total: 0, started: true };
+                    if (timerInterval.value) {
+                        clearInterval(timerInterval.value);
+                        timerInterval.value = null;
+                    }
+                }
+            }
+        } else {
+            // Reservation hasn't started yet - show countdown to start
+            const timeToStart = start - now;
+            const hours = Math.floor(timeToStart / (1000 * 60 * 60));
+            const minutes = Math.floor((timeToStart % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((timeToStart % (1000 * 60)) / 1000);
+            reservationTimer.value = {
+                hours,
+                minutes,
+                seconds,
+                total: timeToStart,
+                started: false,
+            };
+        }
+    };
+    
+    updateTimer();
+    if (timerInterval.value) {
+        clearInterval(timerInterval.value);
+    }
+    timerInterval.value = setInterval(updateTimer, 1000);
+};
+
+const copyToClipboard = async (text, label = 'Text') => {
+    try {
+        await navigator.clipboard.writeText(text);
+        showToast(`${label} copied to clipboard!`, 'success', 2000);
+    } catch (err) {
+        showToast('Failed to copy to clipboard', 'error', 3000);
+    }
 };
 
 </script>
@@ -1460,6 +1595,79 @@ const refreshReservations = () => {
                                     </svg>
                                 </div>
                                 <h4 class="text-xl font-bold text-emerald-700">Payment Successful!</h4>
+                                
+                                <!-- WiFi Credentials Card -->
+                                <div v-if="wifiCredentials && reservationTimer" class="bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-left space-y-3">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+                                            </svg>
+                                            <p class="text-sm font-bold text-blue-900">WiFi Access Credentials</p>
+                                        </div>
+                                        <div v-if="reservationTimer.started" class="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-mono font-bold">
+                                            {{ String(reservationTimer.hours).padStart(2, '0') }}:{{ String(reservationTimer.minutes).padStart(2, '0') }}:{{ String(reservationTimer.seconds).padStart(2, '0') }}
+                                        </div>
+                                        <div v-else class="bg-amber-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
+                                            Starts in {{ String(reservationTimer.hours).padStart(2, '0') }}:{{ String(reservationTimer.minutes).padStart(2, '0') }}:{{ String(reservationTimer.seconds).padStart(2, '0') }}
+                                        </div>
+                                    </div>
+                                    
+                                    <div v-if="reservationTimer.started" class="space-y-2">
+                                        <div class="bg-white rounded-lg p-3 space-y-1">
+                                            <div class="flex justify-between items-center">
+                                                <span class="text-xs text-blue-700 font-semibold">Network Name (SSID)</span>
+                                                <button @click="copyToClipboard(wifiCredentials.ssid, 'SSID')" class="text-blue-600 hover:text-blue-800">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                            <p class="font-mono text-sm font-bold text-blue-900">{{ wifiCredentials.ssid }}</p>
+                                        </div>
+                                        
+                                        <div class="bg-white rounded-lg p-3 space-y-1">
+                                            <div class="flex justify-between items-center">
+                                                <span class="text-xs text-blue-700 font-semibold">Username</span>
+                                                <button @click="copyToClipboard(wifiCredentials.username, 'Username')" class="text-blue-600 hover:text-blue-800">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                            <p class="font-mono text-sm font-bold text-blue-900">{{ wifiCredentials.username }}</p>
+                                        </div>
+                                        
+                                        <div class="bg-white rounded-lg p-3 space-y-1">
+                                            <div class="flex justify-between items-center">
+                                                <span class="text-xs text-blue-700 font-semibold">Password</span>
+                                                <button @click="copyToClipboard(wifiCredentials.password, 'Password')" class="text-blue-600 hover:text-blue-800">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                            <p class="font-mono text-sm font-bold text-blue-900">{{ wifiCredentials.password }}</p>
+                                        </div>
+                                        
+                                        <p class="text-[10px] text-blue-700 italic flex items-center gap-1">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="12" cy="12" r="10"></circle>
+                                                <polyline points="12 6 12 12 16 14"></polyline>
+                                            </svg>
+                                            Credentials valid for {{ finalizedPricing.hours }} hour(s) starting from {{ bookingStart || 'now' }}
+                                        </p>
+                                    </div>
+                                    
+                                    <div v-else class="text-center py-4">
+                                        <p class="text-sm text-blue-800 font-semibold">WiFi credentials will be available when your reservation starts</p>
+                                        <p class="text-xs text-blue-600 mt-1">Check back in {{ String(reservationTimer.hours).padStart(2, '0') }}:{{ String(reservationTimer.minutes).padStart(2, '0') }}:{{ String(reservationTimer.seconds).padStart(2, '0') }}</p>
+                                    </div>
+                                </div>
+                                
                                 <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-left space-y-2">
                                     <p class="text-sm text-emerald-900 font-semibold">Reservation Confirmed</p>
                                     <div class="text-xs text-emerald-800 space-y-1">
@@ -1548,6 +1756,16 @@ const refreshReservations = () => {
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div v-if="toast.show" class="fixed top-4 right-4 z-[9999]">
+        <div 
+            class="px-4 py-3 rounded shadow-lg border text-sm min-w-[250px]"
+            :class="toast.type === 'success' ? 'bg-green-50 text-green-800 border-green-200' : 'bg-red-50 text-red-800 border-red-200'"
+        >
+            {{ toast.message }}
         </div>
     </div>
 </template>
