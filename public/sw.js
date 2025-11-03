@@ -1,7 +1,7 @@
-const CACHE_NAME = 'coz-workspace-v3';
-const RUNTIME_CACHE = 'coz-runtime-v3';
-const IMAGE_CACHE = 'coz-images-v3';
-const STATIC_CACHE = 'coz-static-v3';
+const CACHE_NAME = 'coz-workspace-v7';
+const RUNTIME_CACHE = 'coz-runtime-v7';
+const IMAGE_CACHE = 'coz-images-v7';
+const STATIC_CACHE = 'coz-static-v7';
 
 const urlsToCache = [
   '/',
@@ -23,127 +23,51 @@ self.addEventListener('install', event => {
 
 // Fetch event - smart caching strategies
 self.addEventListener('fetch', event => {
-  const requestUrl = new URL(event.request.url);
-  
-  // Skip non-GET requests and different origins
-  if (event.request.method !== 'GET' || 
-      (requestUrl.protocol !== 'http:' && requestUrl.protocol !== 'https:') || 
-      requestUrl.origin !== self.location.origin) {
-    return;
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // 1. Skip non-GET requests, cross-origin requests, and auth routes.
+  // Let the browser handle these directly.
+  if (request.method !== 'GET' || 
+      url.origin !== self.location.origin ||
+      url.pathname.includes('/auth/google/callback') || // Explicitly ignore Google callback
+      url.pathname.includes('/auth/') ||
+      url.pathname.includes('/login') ||
+      url.pathname.includes('/logout') ||
+      url.pathname.includes('/register')) {
+    return; 
   }
 
-  // Different strategies for different resource types
-  
-  // 1. Images - Cache First (with fallback)
-  if (event.request.destination === 'image') {
-    event.respondWith(
-      caches.open(IMAGE_CACHE).then(cache => {
-        return cache.match(event.request).then(response => {
-          if (response) return response;
-          
-          return fetch(event.request).then(networkResponse => {
-            // Cache successful image responses
-            if (networkResponse && networkResponse.status === 200) {
-              cache.put(event.request, networkResponse.clone());
-            }
-            return networkResponse;
-          }).catch(() => {
-            // Return placeholder image if offline
-            return new Response(
-              '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect fill="#e5e7eb" width="200" height="200"/><text x="50%" y="50%" text-anchor="middle" fill="#9ca3af" font-family="sans-serif" font-size="14">Image Offline</text></svg>',
-              { headers: { 'Content-Type': 'image/svg+xml' } }
-            );
-          });
-        });
-      })
-    );
-    return;
-  }
-
-  // 2. Static assets (CSS, JS, fonts) - Cache First
-  if (event.request.destination === 'style' || 
-      event.request.destination === 'script' || 
-      event.request.destination === 'font' ||
-      requestUrl.pathname.includes('/build/')) {
-    event.respondWith(
-      caches.open(STATIC_CACHE).then(cache => {
-        return cache.match(event.request).then(response => {
-          if (response) return response;
-          
-          return fetch(event.request).then(networkResponse => {
-            if (networkResponse && networkResponse.status === 200) {
-              cache.put(event.request, networkResponse.clone());
-            }
-            return networkResponse;
-          });
-        });
-      })
-    );
-    return;
-  }
-
-  // 3. HTML/Navigation - Network First (with offline fallback)
-  if (event.request.destination === 'document' || event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          // Cache successful page responses
-          if (response && response.status === 200) {
-            const responseClone = response.clone();
-            caches.open(RUNTIME_CACHE).then(cache => {
-              cache.put(event.request, responseClone);
-            });
-          }
-          return response;
-        })
-        .catch(() => {
-          // Try cache first
-          return caches.match(event.request).then(cachedResponse => {
-            if (cachedResponse) return cachedResponse;
-            
-            // Show offline page as last resort
-            return caches.match('/offline.html');
-          });
-        })
-    );
-    return;
-  }
-
-  // 4. API calls - Network First (with cache fallback for GET)
-  if (requestUrl.pathname.includes('/api/') || requestUrl.pathname.includes('/coz-control/')) {
-    event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          // Only cache successful GET responses
-          if (response && response.status === 200 && event.request.method === 'GET') {
-            const responseClone = response.clone();
-            caches.open(RUNTIME_CACHE).then(cache => {
-              cache.put(event.request, responseClone);
-            });
-          }
-          return response;
-        })
-        .catch(() => {
-          // Return cached data if available
-          return caches.match(event.request);
-        })
-    );
-    return;
-  }
-
-  // 5. Everything else - Network First with runtime cache
+  // For all other GET requests, use a network-first strategy.
   event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        if (response && response.status === 200) {
-          const responseClone = response.clone();
-          caches.open(RUNTIME_CACHE).then(cache => {
-            cache.put(event.request, responseClone);
-          });
+    caches.open(RUNTIME_CACHE).then(cache => {
+      return fetch(request).then(networkResponse => {
+        // If we get a valid response, cache it and return it.
+        if (networkResponse && networkResponse.status === 200) {
+          cache.put(request, networkResponse.clone());
         }
-        return response;
-      })
-      .catch(() => caches.match(event.request))
+        return networkResponse;
+      }).catch(() => {
+        // If the network request fails, try to find a cached response.
+        return cache.match(request).then(cachedResponse => {
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+
+          // If it's a navigation request and no cache, show the offline page.
+          if (request.mode === 'navigate') {
+            return caches.match('/offline.html');
+          }
+          
+          // For other assets (images, etc.), we can return a simple error
+          // or a placeholder, but for now, a simple error is fine.
+          return new Response('Network error and no cache available.', {
+            status: 404,
+            statusText: 'Not Found'
+          });
+        });
+      });
+    })
   );
 });
 

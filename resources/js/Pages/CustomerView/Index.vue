@@ -7,6 +7,8 @@ import gcashLogo from '../../../img/customer_view/GCash_logo.svg';
 import mayaLogo from '../../../img/customer_view/Maya_logo.svg';
 import SpaceCalendar from '../../Components/SpaceCalendar.vue';
 import ReservationDetailModal from '../../Components/ReservationDetailModal.vue';
+import PWAInstallButton from '../../Components/PWAInstallButton.vue';
+import OfflineDataView from '../../Components/OfflineDataView.vue';
 import { offlineStorage } from '../../utils/offlineStorage';
 // Removed payment logos; availability card no longer shown
 
@@ -451,6 +453,9 @@ const showToast = (message, type = 'success', duration = 3000) => {
     toastTimerId = setTimeout(() => { toast.value.show = false; }, duration);
 };
 
+// Offline data view reference
+const offlineDataViewRef = ref(null);
+
 // Booking selection and availability gating
 // Initialize with current Manila time
 const initialManilaTime = getManilaNow();
@@ -791,6 +796,21 @@ const confirmPayment = () => {
                 if (reservation) {
                     mockReservation.id = reservation.id;
                     wifiCredentials.value = generateWiFiCredentials(reservation.id);
+                    
+                    // Save complete reservation data for offline access
+                    offlineStorage.saveReservation({
+                        ...reservation,
+                        space_name: selectedSpace.value.name,
+                        customer_name: customerDetails.value.name,
+                        customer_email: customerDetails.value.email,
+                        customer_phone: customerDetails.value.phone,
+                        customer_company_name: customerDetails.value.company_name,
+                    });
+                    
+                    // Refresh offline data view if it exists
+                    if (offlineDataViewRef.value) {
+                        offlineDataViewRef.value.loadData();
+                    }
                 }
             },
             onError: (errors) => {
@@ -825,9 +845,27 @@ const confirmPayment = () => {
 
     router.post(route('public.reservations.store'), payload, {
         preserveScroll: true,
-        onSuccess: () => {
+        onSuccess: (page) => {
             paymentStatus.value = { type: 'hold' };
             paymentStep.value = 3;
+            
+            // Save reservation data for offline access
+            const reservation = page.props?.reservationCreated;
+            if (reservation) {
+                offlineStorage.saveReservation({
+                    ...reservation,
+                    space_name: selectedSpace.value.name,
+                    customer_name: customerDetails.value.name,
+                    customer_email: customerDetails.value.email,
+                    customer_phone: customerDetails.value.phone,
+                    customer_company_name: customerDetails.value.company_name,
+                });
+                
+                // Refresh offline data view if it exists
+                if (offlineDataViewRef.value) {
+                    offlineDataViewRef.value.loadData();
+                }
+            }
         },
         onError: (errors) => {
             paymentStatus.value = { type: 'hold' };
@@ -1233,6 +1271,16 @@ const copyToClipboard = async (text, label = 'Text') => {
                             
                         </section>
 
+                        <!-- Offline Data View -->
+                        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10">
+                            <OfflineDataView 
+                                ref="offlineDataViewRef"
+                                :is-online="isOnline"
+                                @copy-success="(msg) => showToast(msg, 'success', 2000)"
+                                @data-cleared="() => showToast('Offline data cleared', 'success', 2000)"
+                            />
+                        </div>
+
                         <section id="spaces" class="space-y-6 pt-12">
                             <div class="flex flex-wrap items-center justify-between gap-4">
                                 <div>
@@ -1342,7 +1390,9 @@ const copyToClipboard = async (text, label = 'Text') => {
                                             <div class="flex items-baseline justify-between">
                                                 <div>
                                                     <div class="text-2xl font-bold text-[#2f4686]">{{ space.priceLabel }}</div>
-                                                    <div class="text-xs uppercase tracking-wide text-slate-500">per person per hour</div>
+                                                    <div class="text-xs uppercase tracking-wide text-slate-500">
+                                                        {{ space.pricing_type === 'per_reservation' ? 'per reservation per hour' : 'per person per hour' }}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -1722,7 +1772,7 @@ const copyToClipboard = async (text, label = 'Text') => {
                                                 <button @click="copyToClipboard(wifiCredentials.ssid, 'SSID')" class="text-blue-600 hover:text-blue-800">
                                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2 2v1"></path>
                                                     </svg>
                                                 </button>
                                             </div>
@@ -1870,6 +1920,9 @@ const copyToClipboard = async (text, label = 'Text') => {
             {{ toast.message }}
         </div>
     </div>
+
+    <!-- PWA Install Button -->
+    <PWAInstallButton />
 </template>
 
 <style scoped>

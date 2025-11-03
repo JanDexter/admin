@@ -105,9 +105,11 @@ class SpaceManagementController extends Controller
                     'user_id' => optional($customer->user)->getKey(),
                     'is_user_only' => false,
                 ];
-            });
+            })
+            ->values()
+            ->all();
 
-        $existingUserIds = $customerRecords
+        $existingUserIds = collect($customerRecords)
             ->pluck('user_id')
             ->filter()
             ->all();
@@ -131,9 +133,11 @@ class SpaceManagementController extends Controller
                     'user_id' => $user->getKey(),
                     'is_user_only' => true,
                 ];
-            });
+            })
+            ->values()
+            ->all();
 
-        $allCustomers = $customerRecords
+        $allCustomers = collect($customerRecords)
             ->merge($userOnlyRecords)
             ->sortBy('display_name', SORT_NATURAL | SORT_FLAG_CASE)
             ->values()
@@ -193,6 +197,7 @@ class SpaceManagementController extends Controller
         $validated = $request->validate([
             'hourly_rate' => 'nullable|numeric|min:0',
             'default_price' => 'nullable|numeric|min:0',
+            'pricing_type' => 'nullable|in:per_person,per_reservation',
             'default_discount_hours' => 'nullable|integer|min:1',
             'default_discount_percentage' => 'nullable|numeric|min:0|max:100',
         ]);
@@ -375,6 +380,7 @@ class SpaceManagementController extends Controller
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
             'hourly_rate' => 'required|numeric|min:0',
+            'pricing_type' => 'nullable|in:per_person,per_reservation',
             'default_discount_hours' => 'nullable|integer|min:1',
             'default_discount_percentage' => 'nullable|numeric|min:0|max:100',
             'initial_slots' => 'required|integer|min:1',
@@ -387,6 +393,7 @@ class SpaceManagementController extends Controller
                 'name' => strtoupper($validated['name']),
                 'default_price' => $validated['hourly_rate'],
                 'hourly_rate' => $validated['hourly_rate'],
+                'pricing_type' => $validated['pricing_type'] ?? 'per_person',
                 'default_discount_hours' => $validated['default_discount_hours'] ?? null,
                 'default_discount_percentage' => $validated['default_discount_percentage'] ?? null,
                 'total_slots' => $validated['initial_slots'],

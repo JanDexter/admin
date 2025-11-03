@@ -13,6 +13,7 @@ use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\AccountingController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\AdminReservationController;
+use App\Http\Controllers\SetupController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -20,6 +21,12 @@ Route::get('/', CustomerViewController::class)->name('customer.view');
 
 Route::get('/auth/google', [GoogleAuthController::class, 'redirectToGoogle'])->name('auth.google.redirect');
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'handleGoogleCallback'])->name('auth.google.callback');
+
+// First-time admin setup routes - only accessible when no admin exists
+Route::middleware('guest')->group(function () {
+    Route::get('/setup', [SetupController::class, 'showSetupForm'])->name('setup.form');
+    Route::post('/setup', [SetupController::class, 'storeAdmin'])->name('setup.store');
+});
 
 $adminPrefix = trim(config('app.admin_area_prefix', 'coz-control'), '/');
 
@@ -40,14 +47,17 @@ Route::get('/health', function () {
     return response()->json(['status' => 'ok']);
 });
 
-// Public reservation endpoint - now requires authentication
-Route::post('/public/reservations', [PublicReservationController::class, 'store'])
-    ->middleware('auth')
-    ->name('public.reservations.store');
+// Public reservation endpoints with rate limiting for security
+Route::middleware(['throttle:60,1'])->group(function () {
+    // Public reservation endpoint - requires authentication
+    Route::post('/public/reservations', [PublicReservationController::class, 'store'])
+        ->middleware('auth')
+        ->name('public.reservations.store');
 
-// Check availability for specific time window - no auth required
-Route::post('/public/check-availability', [PublicReservationController::class, 'checkAvailability'])
-    ->name('public.check-availability');
+    // Check availability for specific time window - no auth required but rate limited
+    Route::post('/public/check-availability', [PublicReservationController::class, 'checkAvailability'])
+        ->name('public.check-availability');
+});
 
 // The registration routes are now handled by the controller and auth.php
 // Route::any('/register', function () {

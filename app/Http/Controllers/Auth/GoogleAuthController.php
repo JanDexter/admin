@@ -30,16 +30,41 @@ class GoogleAuthController extends Controller
     public function handleGoogleCallback()
     {
         try {
-            $googleUser = Socialite::driver('google')->user();
+            // Use stateless in local to avoid state/session issues during OAuth callback
+            $driver = Socialite::driver('google');
+            if (app()->environment('local')) {
+                $driver = $driver->stateless();
+            }
+            $googleUser = $driver->user();
+
             $intent = session('google_auth_intent', 'customer');
             session()->forget('google_auth_intent');
 
+            $user = null;
             if ($intent === 'admin') {
-                return $this->handleAdminLogin($googleUser);
+                $user = $this->handleAdminLogin($googleUser);
             } else {
-                return $this->handleCustomerLogin($googleUser);
+                $user = $this->handleCustomerLogin($googleUser);
             }
+
+            if ($user) {
+                Auth::login($user, true);
+                // Regenerate session to prevent fixation and ensure cookie is refreshed
+                request()->session()->regenerate();
+
+                // Redirect appropriately based on intent
+                if ($intent === 'admin') {
+                    return redirect()->intended(route('dashboard'))
+                        ->with('success', 'Successfully signed in with Google.');
+                }
+                return redirect()->route('customer.view')
+                    ->with('success', 'Successfully signed in with Google.');
+            }
+
+            return redirect()->route('customer.view')->with('error', 'Could not sign you in with Google.');
+
         } catch (\Exception $e) {
+            \Log::error('Google Auth Error: ' . $e->getMessage());
             return redirect()->route('customer.view')
                 ->with('error', 'Failed to authenticate with Google. Please try again.');
         }
@@ -65,20 +90,13 @@ class GoogleAuthController extends Controller
 
             // Check if user is active
             if (!$user->is_active) {
-                return redirect()->route('login')
-                    ->with('error', 'Your account has been deactivated. Please contact the administrator.');
+                return null; // Deactivated account
             }
 
-            // Login the user
-            Auth::login($user, true);
-
-            return $this->handleTwoFactorRedirect($user);
+            return $user;
         }
 
-        // New Google user - only allow if they have an existing account by email
-        // This prevents random Google accounts from creating admin accounts
-        return redirect()->route('login')
-            ->with('error', 'No admin account found. Please use your registered email and password, or contact the administrator.');
+        return null; // No account found
     }
 
     /**
@@ -86,89 +104,73 @@ class GoogleAuthController extends Controller
      */
     protected function handleCustomerLogin($googleUser)
     {
-        $customer = Customer::where('email', $googleUser->getEmail())->first();
+        // Find or create a User account for the customer
+        $user = User::where('google_id', $googleUser->getId())
+            ->orWhere('email', $googleUser->getEmail())
+            ->first();
 
-        if ($customer) {
-            $customer->update([
-                'google_id' => $googleUser->getId(),
-                'avatar'    => $googleUser->getAvatar(),
-                'name'      => $customer->name ?: $googleUser->getName(),
-            ]);
-        } else {
-            $displayName = $googleUser->getName() ?: trim(strtok($googleUser->getEmail(), '@'));
-
-            $customer = Customer::create([
-                'email'     => $googleUser->getEmail(),
-                'name'      => $displayName,
-                'company_name' => $displayName ?: 'Google Customer',
-                'contact_person' => $displayName ?: 'Google Customer',
-                'status'    => 'active',
-                'google_id' => $googleUser->getId(),
-                'avatar'    => $googleUser->getAvatar(),
-            ]);
-        }
-
-        // Ensure there is a corresponding user account with role 'customer'
-        $user = User::where('email', $customer->email)->first();
         if (!$user) {
-            $user = new User([
-                'name' => $customer->name,
-                'email' => $customer->email,
+            $user = User::create([
+                'name'              => $googleUser->getName() ?: trim(strtok($googleUser->getEmail(), '@')),
+                'email'             => $googleUser->getEmail(),
+                'password'          => \Illuminate\Support\Str::random(32), // hashed by casts
+                'role'              => User::ROLE_CUSTOMER,
+                'is_active'         => true,
+                'email_verified_at' => now(),
+                'google_id'         => $googleUser->getId(),
+                'avatar'            => $googleUser->getAvatar(),
             ]);
-            $user->role = User::ROLE_CUSTOMER;
-            $user->is_active = true;
-            $user->google_id = $googleUser->getId();
-            $user->avatar = $googleUser->getAvatar();
-            // Generate a random password to satisfy not-null constraint; user signs in with Google anyway
-            $user->password = bcrypt(Str::random(32));
-            $user->save();
         } else {
-            // Update google fields for existing user (if any)
-            $user->google_id = $user->google_id ?: $googleUser->getId();
-            $user->avatar = $googleUser->getAvatar() ?: $user->avatar;
-            if (!$user->is_active) {
-                // Don't allow deactivated users to login
-                return redirect()->route('login')
-                    ->with('error', 'Your account has been deactivated. Please contact the administrator.');
-            }
-            $user->save();
+            // Keep user profile in sync
+            $user->fill([
+                'name'      => $user->name ?: ($googleUser->getName() ?: trim(strtok($googleUser->getEmail(), '@'))),
+                'google_id' => $user->google_id ?: $googleUser->getId(),
+                'avatar'    => $googleUser->getAvatar() ?: $user->avatar,
+                'is_active' => true,
+            ])->save();
         }
 
-        // Link customer to user if not linked
+        // Ensure a Customer profile exists and is linked to the User
+        $displayName = $googleUser->getName() ?: trim(strtok($googleUser->getEmail(), '@'));
+        $customer = Customer::firstOrCreate(
+            ['email' => $googleUser->getEmail()],
+            [
+                'name'    => $displayName,
+                // other default fields can be null
+            ]
+        );
+
         if (!$customer->user_id) {
             $customer->user_id = $user->id;
             $customer->save();
         }
 
-        // Log in the customer user
-        Auth::login($user, true);
-
-        return redirect()->route('customer.view');
+        return $user; // Return Authenticatable User for session login
     }
 
-        /**
-         * Handle two-factor requirements after a successful admin login.
-         */
-        protected function handleTwoFactorRedirect($user)
-        {
-            $session = session();
+    /**
+     * Handle two-factor requirements after a successful admin login.
+     */
+    protected function handleTwoFactorRedirect($user)
+    {
+        $session = session();
 
-            if (method_exists($user, 'hasTwoFactorEnabled') && $user->hasTwoFactorEnabled()) {
-                $session->put('two_factor:id', $user->id);
-                $session->put('two_factor:remember', true);
-                $session->put('two_factor:intended', route('dashboard'));
+        if (method_exists($user, 'hasTwoFactorEnabled') && $user->hasTwoFactorEnabled()) {
+            $session->put('two_factor:id', $user->id);
+            $session->put('two_factor:remember', true);
+            $session->put('two_factor:intended', route('dashboard'));
 
-                Auth::logout();
+            Auth::logout();
 
-                $session->flash('status', 'Please complete two-factor authentication to continue.');
-
-                $session->regenerate();
-
-                return redirect()->route('two-factor.challenge');
-            }
+            $session->flash('status', 'Please complete two-factor authentication to continue.');
 
             $session->regenerate();
 
-            return redirect()->intended(route('dashboard'));
+            return redirect()->route('two-factor.challenge');
         }
+
+        $session->regenerate();
+
+        return redirect()->intended(route('dashboard'));
+    }
 }
