@@ -39,6 +39,10 @@ return [
         'client_id' => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
         'redirect' => env('GOOGLE_REDIRECT_URI'),
+        // Conditionally apply Guzzle config for local SSL fix
+        'guzzle' => app()->environment('local') ? [
+            'verify' => config_path('certs/cacert.pem'),
+        ] : [],
     ],
 
 ];

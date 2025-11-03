@@ -51,6 +51,12 @@ class GoogleAuthController extends Controller
                 Auth::login($user, true);
                 // Regenerate session to prevent fixation and ensure cookie is refreshed
                 request()->session()->regenerate();
+                
+                // Explicitly save the session before redirecting
+                session()->save();
+
+                // Log the successful login for debugging
+                \Log::info('User ' . $user->id . ' successfully authenticated via Google.');
 
                 // Redirect appropriately based on intent
                 if ($intent === 'admin') {
