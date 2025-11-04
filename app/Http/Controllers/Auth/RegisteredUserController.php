@@ -42,16 +42,14 @@ class RegisteredUserController extends Controller
 
         $isFirstUser = User::count() === 0;
 
-        $user = new User([
+        $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'phone' => $request->phone,
-            'password' => Hash::make($request->password),
+            'password' => $request->password, // Use the validated password directly
+            'role' => $isFirstUser ? User::ROLE_ADMIN : User::ROLE_CUSTOMER,
+            'is_active' => true,
         ]);
-        // First user becomes admin; others are customers by default
-        $user->role = $isFirstUser ? User::ROLE_ADMIN : User::ROLE_CUSTOMER;
-        $user->is_active = true;
-        $user->save();
 
         // Automatically create a Customer record for customer users
         if ($user->role === User::ROLE_CUSTOMER) {

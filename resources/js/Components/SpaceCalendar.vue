@@ -50,13 +50,12 @@ const formatDate = (datetime) => {
     });
 };
 
-// Generate time slots from 9 AM to 12 AM (midnight)
+// Generate time slots for full 24-hour day
 const timeSlots = computed(() => {
     const slots = [];
-    for (let hour = 9; hour <= 24; hour++) {
-        const displayHour = hour === 24 ? 0 : hour;
-        const ampm = hour < 12 ? 'AM' : (hour === 24 ? 'AM' : 'PM');
-        const display12 = hour === 12 ? 12 : (hour > 12 && hour < 24 ? hour - 12 : (hour === 24 ? 12 : hour));
+    for (let hour = 0; hour < 24; hour++) {
+        const ampm = hour < 12 ? 'AM' : 'PM';
+        const display12 = hour === 0 ? 12 : (hour > 12 ? hour - 12 : hour);
         slots.push({
             hour,
             time: `${String(hour).padStart(2, '0')}:00`,
@@ -85,10 +84,11 @@ const reservationSlots = computed(() => {
         const movingNow = currentTime.value;
         const end = res.end_time ? new Date(res.end_time) : new Date(movingNow);
         const startHour = start.getHours();
+        const startMinutes = start.getMinutes();
         const endHour = end.getHours();
         const duration = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60)));
         
-        for (let h = startHour; h < startHour + duration && h <= 24; h++) {
+        for (let h = startHour; h < startHour + duration && h < 24; h++) {
             if (!slots[h]) slots[h] = [];
             slots[h].push({
                 ...res,
@@ -96,6 +96,7 @@ const reservationSlots = computed(() => {
                 isEnd: h >= endHour - 1,
                 duration,
                 position: slots[h].length,
+                startMinutes: h === startHour ? startMinutes : 0, // Store minutes offset for positioning
             });
         }
     });
@@ -217,9 +218,7 @@ const currentTimePosition = computed(() => {
     const hour = now.getHours();
     const minutes = now.getMinutes();
     
-    if (hour < 9 || hour >= 24) return null;
-    
-    const slotIndex = hour - 9;
+    const slotIndex = hour;
     const minuteOffset = (minutes / 60) * 100;
     
     return {
@@ -317,17 +316,18 @@ const currentTimePosition = computed(() => {
                     <div class="flex-1 p-2 relative">
                         <div
                             v-if="reservationSlots[slot.hour] && reservationSlots[slot.hour].length"
-                            class="flex flex-col gap-1"
+                            class="flex flex-col gap-1 relative h-full"
                         >
                             <div
                                 v-for="(res, idx) in reservationSlots[slot.hour]"
                                 :key="`${res.id}-${idx}`"
                                 v-show="res.isStart"
                                 @click="handleReservationClick(res)"
-                                class="cursor-pointer rounded-lg border-2 p-2 transition-all hover:shadow-md hover:scale-[1.02]"
+                                class="cursor-pointer rounded-lg border-2 p-2 transition-all hover:shadow-md hover:scale-[1.02] absolute left-0 right-0"
                                 :class="getStatusStyle(res.status)"
                                 :style="{
-                                    minHeight: `${res.duration * 60}px`,
+                                    top: res.isStart ? `${(res.startMinutes / 60) * 80}px` : '0px',
+                                    minHeight: `${res.duration * 80 - (res.startMinutes / 60) * 80}px`,
                                 }"
                             >
                                 <div class="flex items-start justify-between gap-2 mb-1">
@@ -335,12 +335,12 @@ const currentTimePosition = computed(() => {
                                         <div class="text-xs font-bold truncate">
                                             {{ res.customer?.name || res.customer_name || 'Guest' }}
                                         </div>
-                                        <div class="text-[10px] opacity-75">
+                                        <div class="text-[11px] font-semibold">
                                             <template v-if="res.end_time">
                                                 {{ formatTime(res.start_time) }} - {{ formatTime(res.end_time) }}
                                             </template>
                                             <template v-else>
-                                                Started {{ formatTime(res.start_time) }} · Open time
+                                                {{ formatTime(res.start_time) }} - Open time
                                             </template>
                                         </div>
                                     </div>

@@ -135,7 +135,7 @@ Route::middleware(['auth', 'can:admin-access'])->prefix($adminPrefix)->group(fun
 Route::middleware('auth')->group(function () {
     Route::post('reservations/{reservation}/extend', [PublicReservationController::class, 'extend'])->name('reservations.extend');
     Route::post('reservations/{reservation}/end-early', [PublicReservationController::class, 'endEarly'])->name('reservations.end-early');
-    Route::post('reservations/{reservation}/pay', [PaymentController::class, 'processCustomerPayment'])->name('customer.reservations.pay');
+    Route::post('reservations/{reservation}/pay', [PaymentController::class, 'processPayment'])->name('customer.reservations.pay');
     Route::delete('reservations/{reservation}', [PublicReservationController::class, 'destroy'])->name('reservations.destroy');
 });
 

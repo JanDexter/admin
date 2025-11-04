@@ -39,14 +39,20 @@ class PaymentController extends Controller
             }
 
             // Update reservation with payment information
-            $reservation->update([
+            $updateData = [
                 'amount_paid' => $newTotalPaid,
                 'payment_method' => $validated['payment_method'],
                 'status' => $status,
-                'notes' => $validated['notes'] 
-                    ? ($reservation->notes ? $reservation->notes . "\n" . $validated['notes'] : $validated['notes'])
-                    : $reservation->notes,
-            ]);
+            ];
+            
+            // Only update notes if provided
+            if (isset($validated['notes']) && $validated['notes']) {
+                $updateData['notes'] = $reservation->notes 
+                    ? $reservation->notes . "\n" . $validated['notes'] 
+                    : $validated['notes'];
+            }
+            
+            $reservation->update($updateData);
 
             // If there's a customer, update their amount_paid
             if ($reservation->customer) {

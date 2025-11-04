@@ -1,6 +1,8 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { router } from '@inertiajs/vue3';
+import gcashLogo from '../../img/customer_view/GCash_logo.svg';
+import mayaLogo from '../../img/customer_view/Maya_logo.svg';
 
 const props = defineProps({
     reservation: {
@@ -21,6 +23,7 @@ const extendHours = ref(1);
 const showExtendForm = ref(false);
 const showPaymentForm = ref(false);
 const paymentAmount = ref(0);
+const selectedPaymentMethod = ref('');
 
 let timeInterval;
 
@@ -175,22 +178,45 @@ const handleEndEarly = () => {
 // Handle payment
 const handlePayment = () => {
     if (!paymentAmount.value || paymentAmount.value <= 0) return;
+    if (!selectedPaymentMethod.value) {
+        alert('Please select a payment method');
+        return;
+    }
     
+    // Mock payment success for GCash/Maya - simulate immediately
     processing.value = true;
-    router.post(route('customer.reservations.pay', props.reservation.id), {
-        amount: paymentAmount.value,
-    }, {
-        preserveScroll: true,
-        onSuccess: () => {
-            showPaymentForm.value = false;
-            paymentAmount.value = 0;
-            emit('updated');
-            emit('close');
-        },
-        onFinish: () => {
-            processing.value = false;
-        },
-    });
+    
+    // Simulate payment processing delay then proceed
+    setTimeout(() => {
+        // Send to backend to update reservation
+        router.post(route('customer.reservations.pay', props.reservation.id), {
+            amount: paymentAmount.value,
+            payment_method: selectedPaymentMethod.value,
+        }, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                processing.value = false;
+                showPaymentForm.value = false;
+                paymentAmount.value = 0;
+                selectedPaymentMethod.value = '';
+                
+                // Show success message
+                alert('✓ Payment Successful!\n\nThis was a mock payment for demonstration purposes. No actual charges were made.');
+                
+                emit('updated');
+                // Don't close immediately, let user see the updated status
+                setTimeout(() => {
+                    emit('close');
+                }, 500);
+            },
+            onError: (errors) => {
+                processing.value = false;
+                const errorMsg = errors?.message || 'Payment failed. Please try again.';
+                alert('Payment Error: ' + errorMsg);
+            },
+        });
+    }, 1000); // 1 second delay to simulate payment processing
 };
 
 // Handle cancel
@@ -221,6 +247,7 @@ const close = () => {
 // Set default payment amount to remaining balance
 const openPaymentForm = () => {
     paymentAmount.value = props.reservation.amount_remaining || props.reservation.total_cost || 0;
+    selectedPaymentMethod.value = '';
     showPaymentForm.value = true;
 };
 
@@ -426,6 +453,7 @@ onBeforeUnmount(() => {
                     <!-- Payment Form -->
                     <div v-if="showPaymentForm" class="bg-green-50 rounded-xl p-4 border border-green-200 space-y-3">
                         <h4 class="font-semibold text-gray-900">Make Payment</h4>
+                        
                         <div class="space-y-2">
                             <label class="block text-sm font-medium text-gray-700">
                                 Payment Amount
@@ -442,18 +470,63 @@ onBeforeUnmount(() => {
                                 Maximum: {{ formatCurrency(reservation.amount_remaining || reservation.total_cost) }}
                             </div>
                         </div>
+
+                        <div class="space-y-2">
+                            <label class="block text-sm font-medium text-gray-700">
+                                Payment Method
+                            </label>
+                            <div class="grid grid-cols-2 gap-3">
+                                <button
+                                    type="button"
+                                    @click="selectedPaymentMethod = 'gcash'"
+                                    class="relative flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-all hover:shadow-md"
+                                    :class="selectedPaymentMethod === 'gcash' ? 'border-[#2f4686] bg-blue-50 shadow-md' : 'border-gray-300 hover:border-gray-400'"
+                                >
+                                    <img :src="gcashLogo" alt="GCash" class="h-10 mb-2" />
+                                    <span class="text-sm font-semibold">GCash</span>
+                                    <div v-if="selectedPaymentMethod === 'gcash'" class="absolute top-2 right-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#2f4686]" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                        </svg>
+                                    </div>
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="selectedPaymentMethod = 'maya'"
+                                    class="relative flex flex-col items-center justify-center p-4 border-2 rounded-xl transition-all hover:shadow-md"
+                                    :class="selectedPaymentMethod === 'maya' ? 'border-[#2f4686] bg-blue-50 shadow-md' : 'border-gray-300 hover:border-gray-400'"
+                                >
+                                    <img :src="mayaLogo" alt="Maya" class="h-10 mb-2" />
+                                    <span class="text-sm font-semibold">Maya</span>
+                                    <div v-if="selectedPaymentMethod === 'maya'" class="absolute top-2 right-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-[#2f4686]" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                        </svg>
+                                    </div>
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-500 italic mt-2">
+                                <strong>Note:</strong> GCash and Maya payments are mock transactions for demonstration purposes only.
+                            </p>
+                            <p v-if="!selectedPaymentMethod" class="text-xs text-red-500 mt-1">Please select a payment method</p>
+                        </div>
+
                         <div class="flex gap-2">
                             <button
                                 @click="handlePayment"
-                                :disabled="processing || !paymentAmount || paymentAmount <= 0"
-                                class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                :disabled="processing || !paymentAmount || paymentAmount <= 0 || !selectedPaymentMethod"
+                                class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
-                                {{ processing ? 'Processing...' : 'Submit Payment' }}
+                                <svg v-if="processing" class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span>{{ processing ? 'Processing Payment...' : 'Submit Payment' }}</span>
                             </button>
                             <button
-                                @click="showPaymentForm = false"
+                                @click="showPaymentForm = false; selectedPaymentMethod = ''"
                                 :disabled="processing"
-                                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg transition-colors"
+                                class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-lg transition-colors disabled:opacity-50"
                             >
                                 Cancel
                             </button>
