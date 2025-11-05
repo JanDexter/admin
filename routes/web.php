@@ -10,7 +10,7 @@ use App\Http\Controllers\PublicReservationController;
 use App\Http\Controllers\CustomerViewController;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\CalendarController;
-use App\Http\Controllers\AccountingController;
+use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\AdminReservationController;
 use App\Http\Controllers\SetupController;
@@ -113,6 +113,11 @@ Route::middleware(['auth', 'can:admin-access'])->prefix($adminPrefix)->group(fun
         // Payment routes
         Route::post('payments/reservations/{reservation}', [PaymentController::class, 'processPayment'])->name('payments.process');
         Route::post('payments/customers/{customer}', [PaymentController::class, 'processCustomerPayment'])->name('payments.customer');
+        
+        // Refund management routes
+        Route::get('refunds', [RefundController::class, 'index'])->name('refunds.index');
+        Route::post('refunds/{refund}/process', [RefundController::class, 'process'])->name('refunds.process');
+        Route::post('refunds/{refund}/reject', [RefundController::class, 'reject'])->name('refunds.reject');
     });
     
     // Profile routes
@@ -124,11 +129,13 @@ Route::middleware(['auth', 'can:admin-access'])->prefix($adminPrefix)->group(fun
 
     Route::put('reservations/{reservation}', [AdminReservationController::class, 'update'])->name('admin.reservations.update');
     Route::post('reservations/{reservation}/close', [AdminReservationController::class, 'close'])->name('admin.reservations.close');
+    Route::post('reservations/{reservation}/cancel', [AdminReservationController::class, 'cancel'])->name('admin.reservations.cancel');
+    Route::post('reservations/{reservation}/cancel', [AdminReservationController::class, 'cancel'])->name('admin.reservations.cancel');
 
-    // Accounting routes
-    Route::get('accounting', [AccountingController::class, 'index'])->name('accounting.index');
-    Route::get('accounting/export', [AccountingController::class, 'export'])->name('accounting.export');
-    Route::put('accounting/{reservation}', [AccountingController::class, 'update'])->name('accounting.update');
+    // Transaction routes
+    Route::get('transactions', [TransactionController::class, 'index'])->name('transactions.index');
+    Route::get('transactions/export', [TransactionController::class, 'export'])->name('transactions.export');
+    Route::put('transactions/{reservation}', [TransactionController::class, 'update'])->name('transactions.update');
 });
 
 // Customer reservation management routes (authenticated customers)

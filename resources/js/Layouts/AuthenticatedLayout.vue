@@ -40,8 +40,8 @@ const showingNavigationDropdown = ref(false);
                                 >
                                     Space Management
                                 </NavLink>
-                                <NavLink :href="route('accounting.index')" :active="route().current('accounting.index')">
-                                    Accounting
+                                <NavLink :href="route('transactions.index')" :active="route().current('transactions.index')">
+                                    Transactions
                                 </NavLink>
                                 <NavLink :href="route('calendar')" :active="route().current('calendar')">
                                     Calendar
@@ -172,16 +172,14 @@ const showingNavigationDropdown = ref(false);
                         >
                             Space Management
                         </ResponsiveNavLink>
-                        <ResponsiveNavLink :href="route('accounting.index')" :active="route().current('accounting.index')">
-                            Accounting
+                        <ResponsiveNavLink :href="route('transactions.index')" :active="route().current('transactions.index')">
+                            Transactions
                         </ResponsiveNavLink>
                         <ResponsiveNavLink :href="route('calendar')" :active="route().current('calendar')">
                             Calendar
                         </ResponsiveNavLink>
                         <!-- Task Tracker link removed -->
-                    </div>
-
-                    <!-- Responsive Settings Options -->
+                    </div>                    <!-- Responsive Settings Options -->
                     <div
                         class="border-t border-gray-200 pb-1 pt-4"
                     >

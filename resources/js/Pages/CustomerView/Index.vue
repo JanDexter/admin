@@ -43,6 +43,29 @@ const formatCurrency = (value) => {
     }).format(value);
 };
 
+const formatTime = (datetime) => {
+    if (!datetime) return '';
+    const date = new Date(datetime);
+    return date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'Asia/Manila',
+    });
+};
+
+const formatDate = (datetime) => {
+    if (!datetime) return '';
+    const date = new Date(datetime);
+    return date.toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'Asia/Manila',
+    });
+};
+
 const getManilaNow = () => {
     const parts = new Intl.DateTimeFormat('en-US', {
         timeZone: 'Asia/Manila',
@@ -554,6 +577,20 @@ const canCheckAvailability = computed(() => {
 const checkAvailability = async () => {
     if (!canCheckAvailability.value) return;
     
+    // Auto-adjust if selected time is in the past
+    const selectedDateTime = new Date(`${bookingDate.value}T${bookingStart.value}:00`);
+    const now = new Date();
+    
+    if (selectedDateTime < now) {
+        // Get current Manila time
+        const currentManila = getManilaNow();
+        bookingDate.value = currentManila.date;
+        bookingStart.value = currentManila.time;
+        showToast('Time adjusted to current time as selected time was in the past', 'info', 4000);
+        // Let the watch update, then continue
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
     isCheckingAvailability.value = true;
     availabilityData.value = null;
     
@@ -671,7 +708,7 @@ const openPayment = (space) => {
     customerDetails.value = {
         name: props.auth.user?.name || '',
         email: props.auth.user?.email || '',
-        phone: '',
+        phone: props.auth.user?.phone || '',
         company_name: props.auth.user?.company_name || '',
     };
     formErrors.value = {};
@@ -1115,11 +1152,42 @@ const copyToClipboard = async (text, label = 'Text') => {
                     </div>
                 </div>
                 <nav class="flex items-center gap-3">
-                    <a href="#reservations" @click.prevent="handleViewReservationClick" class="inline-flex items-center gap-2 bg-[#2f4686] hover:bg-[#3956a3] text-white font-semibold text-xs sm:text-sm tracking-wide uppercase px-4 py-2 rounded-full transition-colors">
-                        View Reservation
+                    <!-- My Reservations Button - Only show when logged in and has reservations -->
+                    <a 
+                        v-if="isAuthenticated && reservations.length > 0"
+                        href="#reservations" 
+                        @click.prevent="handleViewReservationClick" 
+                        class="inline-flex items-center gap-2 bg-gradient-to-r from-[#2f4686] to-[#3956a3] hover:from-[#3956a3] hover:to-[#2f4686] text-white font-semibold text-xs sm:text-sm tracking-wide uppercase px-4 py-2 rounded-full transition-all shadow-md hover:shadow-lg relative"
+                    >
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
+                        <span class="hidden sm:inline">My Reservations</span>
+                        <span class="sm:hidden">Bookings</span>
+                        <span class="ml-1 px-2 py-0.5 bg-white text-[#2f4686] rounded-full text-xs font-bold min-w-[1.5rem] text-center">
+                            {{ reservations.length }}
+                        </span>
+                        <!-- Pulse animation for active reservations -->
+                        <span 
+                            v-if="reservations.some(r => r.status === 'active' || r.status === 'paid')"
+                            class="absolute -top-1 -right-1 flex h-3 w-3"
+                        >
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                        </span>
+                    </a>
+                    <!-- Reserve Now Button - Show when no reservations or not logged in -->
+                    <a 
+                        v-else-if="isAuthenticated && reservations.length === 0"
+                        href="#spaces" 
+                        @click.prevent="handleReserveClick"
+                        class="inline-flex items-center gap-2 bg-[#2f4686] hover:bg-[#3956a3] text-white font-semibold text-xs sm:text-sm tracking-wide uppercase px-4 py-2 rounded-full transition-colors"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                        </svg>
+                        <span class="hidden sm:inline">Book a Space</span>
+                        <span class="sm:hidden">Book Now</span>
                     </a>
                     <button
                         v-if="!isAuthenticated"
@@ -1441,6 +1509,126 @@ const copyToClipboard = async (text, label = 'Text') => {
                     <p class="text-gray-600">View and manage your space bookings with real-time status updates</p>
                 </div>
 
+                <!-- Reservation Cards List -->
+                <div class="mb-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div
+                        v-for="reservation in reservations"
+                        :key="reservation.id"
+                        @click="openReservationDetail(reservation)"
+                        class="group bg-white rounded-xl shadow-md hover:shadow-xl transition-all cursor-pointer border-2 hover:border-[#2f4686] overflow-hidden"
+                        :class="{
+                            'border-green-200': reservation.status === 'active',
+                            'border-emerald-200': reservation.status === 'paid' || reservation.status === 'completed',
+                            'border-sky-200': reservation.status === 'partial',
+                            'border-yellow-200': reservation.status === 'pending' || reservation.status === 'on_hold',
+                            'border-gray-200': reservation.status === 'cancelled',
+                            'border-transparent': !['active', 'paid', 'completed', 'partial', 'pending', 'on_hold', 'cancelled'].includes(reservation.status)
+                        }"
+                    >
+                        <!-- Status Banner -->
+                        <div class="px-4 py-2 flex items-center justify-between"
+                             :class="{
+                                 'bg-green-50': reservation.status === 'active',
+                                 'bg-emerald-50': reservation.status === 'paid' || reservation.status === 'completed',
+                                 'bg-sky-50': reservation.status === 'partial',
+                                 'bg-yellow-50': reservation.status === 'pending' || reservation.status === 'on_hold',
+                                 'bg-gray-50': reservation.status === 'cancelled',
+                                 'bg-blue-50': !['active', 'paid', 'completed', 'partial', 'pending', 'on_hold', 'cancelled'].includes(reservation.status)
+                             }">
+                            <span class="text-xs font-bold uppercase tracking-wide"
+                                  :class="{
+                                      'text-green-700': reservation.status === 'active',
+                                      'text-emerald-700': reservation.status === 'paid' || reservation.status === 'completed',
+                                      'text-sky-700': reservation.status === 'partial',
+                                      'text-yellow-700': reservation.status === 'pending' || reservation.status === 'on_hold',
+                                      'text-gray-700': reservation.status === 'cancelled',
+                                      'text-blue-700': !['active', 'paid', 'completed', 'partial', 'pending', 'on_hold', 'cancelled'].includes(reservation.status)
+                                  }">
+                                {{ reservation.status === 'partial' ? 'Partial Payment' : reservation.status }}
+                            </span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-[#2f4686] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                            </svg>
+                        </div>
+
+                        <!-- Card Content -->
+                        <div class="p-4 space-y-3">
+                            <!-- Space Name -->
+                            <div>
+                                <h3 class="font-bold text-lg text-gray-900 group-hover:text-[#2f4686] transition-colors">
+                                    {{ reservation.space_type?.name || 'Space' }}
+                                </h3>
+                                <p v-if="reservation.space?.name" class="text-xs text-gray-500">
+                                    {{ reservation.space.name }}
+                                </p>
+                            </div>
+
+                            <!-- Date & Time -->
+                            <div class="space-y-2">
+                                <div class="flex items-start gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-[#2f4686] flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    <div class="flex-1">
+                                        <div class="text-sm font-semibold text-gray-900">
+                                            {{ formatDate(reservation.start_time) }}
+                                        </div>
+                                        <div class="text-xs text-gray-600">
+                                            {{ formatTime(reservation.start_time) }} - {{ reservation.end_time ? formatTime(reservation.end_time) : 'Open time' }}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Duration & Pax -->
+                                <div class="flex items-center gap-3 text-xs text-gray-600">
+                                    <div class="flex items-center gap-1">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span>{{ reservation.hours }}h</span>
+                                    </div>
+                                    <div class="flex items-center gap-1">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                        </svg>
+                                        <span>{{ reservation.pax }} {{ reservation.pax === 1 ? 'person' : 'people' }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Payment Info -->
+                            <div class="pt-3 border-t border-gray-100">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-1 text-sm">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <span class="font-semibold text-gray-900">{{ formatCurrency(reservation.total_cost) }}</span>
+                                    </div>
+                                    <div v-if="reservation.is_partially_paid" class="text-xs">
+                                        <div class="text-green-600 font-semibold">Paid: {{ formatCurrency(reservation.amount_paid) }}</div>
+                                        <div class="text-orange-600 font-semibold">Bal: {{ formatCurrency(reservation.amount_remaining) }}</div>
+                                    </div>
+                                    <div v-else-if="reservation.status === 'paid' || reservation.status === 'completed'" class="text-xs text-green-600 font-semibold">
+                                        ✓ Fully Paid
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Click hint -->
+                            <div class="pt-2 text-center">
+                                <span class="text-xs text-gray-400 group-hover:text-[#2f4686] italic">Click for details & actions</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Calendar View Toggle -->
+                <div class="mb-6 flex items-center justify-between">
+                    <h3 class="text-xl font-bold text-gray-900">Calendar View</h3>
+                    <p class="text-sm text-gray-600">See your bookings in a timeline</p>
+                </div>
+
                 <!-- Tabs for each space type -->
                 <div class="mb-6">
                     <div class="border-b border-gray-200">
@@ -1639,6 +1827,59 @@ const copyToClipboard = async (text, label = 'Text') => {
                                 <div class="flex justify-between text-sm font-bold text-[#2f4686]">
                                     <span>Estimated Total</span>
                                     <span>{{ formatCurrency(estimatedPricing.finalCost || 0) }}</span>
+                                </div>
+                            </div>
+
+                            <!-- Cancellation & Refund Policy -->
+                            <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2">
+                                <div class="flex items-start gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <div class="flex-1">
+                                        <h4 class="text-sm font-bold text-blue-900 mb-2">Cancellation & Refund Policy</h4>
+                                        <div class="space-y-1.5 text-xs text-blue-800">
+                                            <div class="flex items-start gap-1.5">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-green-600 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                                <span><strong>12+ hours before:</strong> 100% refund</span>
+                                            </div>
+                                            <div class="flex items-start gap-1.5">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-green-500 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                                <span><strong>6-12 hours before:</strong> 90% refund</span>
+                                            </div>
+                                            <div class="flex items-start gap-1.5">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-yellow-600 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                </svg>
+                                                <span><strong>3-6 hours before:</strong> 75% refund</span>
+                                            </div>
+                                            <div class="flex items-start gap-1.5">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-orange-600 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                </svg>
+                                                <span><strong>1-3 hours before:</strong> 50% refund</span>
+                                            </div>
+                                            <div class="flex items-start gap-1.5">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-red-600 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                                <span><strong>Less than 1 hour:</strong> 25% refund</span>
+                                            </div>
+                                            <div class="flex items-start gap-1.5">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-red-700 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                                <span><strong>After start time:</strong> No refund</span>
+                                            </div>
+                                        </div>
+                                        <p class="text-[11px] text-blue-700 mt-2 italic">
+                                            Refunds are processed within 3-5 business days via your original payment method.
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
 

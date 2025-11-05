@@ -73,6 +73,11 @@ class Reservation extends Model
         return $this->belongsTo(SpaceType::class);
     }
 
+    public function refunds()
+    {
+        return $this->hasMany(Refund::class);
+    }
+
     public function scopePaidOrCompleted($query)
     {
         return $query->whereIn('status', ['paid', 'completed']);

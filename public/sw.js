@@ -4,11 +4,10 @@ const IMAGE_CACHE = 'coz-images-v7';
 const STATIC_CACHE = 'coz-static-v7';
 
 const urlsToCache = [
-  '/',
   '/offline.html',
-  '/icons/favicon.svg',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
+  '/manifest.json',
 ];
 
 // Install event - cache essential resources
@@ -16,7 +15,14 @@ self.addEventListener('install', event => {
   self.skipWaiting(); // Activate immediately
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(urlsToCache))
+      .then(cache => {
+        // Cache files individually to avoid one failure blocking all
+        return Promise.allSettled(
+          urlsToCache.map(url => 
+            cache.add(url).catch(err => console.log('Failed to cache:', url, err))
+          )
+        );
+      })
       .catch(err => console.log('Cache install failed:', err))
   );
 });

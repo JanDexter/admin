@@ -58,4 +58,78 @@ class Customer extends Model
     {
         return $this->belongsTo(SpaceType::class, 'space_type_id');
     }
+
+    /**
+     * Validate if customer can make a cash booking
+     * Prevents mass-booking and cancelling abuse
+     * 
+     * @return array ['valid' => bool, 'message' => string]
+     */
+    public function validateCashBooking(): array
+    {
+        // Rule 1: Check active cash bookings (max 2)
+        $activeCashBookings = $this->reservations()
+            ->whereIn('status', ['pending', 'on_hold', 'confirmed', 'active'])
+            ->where('payment_method', 'cash')
+            ->count();
+
+        if ($activeCashBookings >= 2) {
+            return [
+                'valid' => false,
+                'message' => 'You already have the maximum number of pending cash bookings.'
+            ];
+        }
+
+        // Rule 2: Check cancellation rate (over 50% with 5+ total bookings)
+        $totalBookings = $this->reservations()->count();
+        
+        if ($totalBookings > 5) {
+            $totalCancellations = $this->reservations()
+                ->where('status', 'cancelled')
+                ->count();
+            
+            $cancellationRate = ($totalCancellations / $totalBookings) * 100;
+            
+            if ($cancellationRate > 50) {
+                return [
+                    'valid' => false,
+                    'message' => 'Due to your cancellation history, pre-payment is required to make a new booking.'
+                ];
+            }
+        }
+
+        // Both checks passed
+        return [
+            'valid' => true,
+            'message' => 'Validation passed'
+        ];
+    }
+
+    /**
+     * Get customer's booking statistics
+     * 
+     * @return array
+     */
+    public function getBookingStats(): array
+    {
+        $totalBookings = $this->reservations()->count();
+        $activeCashBookings = $this->reservations()
+            ->whereIn('status', ['pending', 'on_hold', 'confirmed', 'active'])
+            ->where('payment_method', 'cash')
+            ->count();
+        $totalCancellations = $this->reservations()
+            ->where('status', 'cancelled')
+            ->count();
+        
+        $cancellationRate = $totalBookings > 0 
+            ? ($totalCancellations / $totalBookings) * 100 
+            : 0;
+
+        return [
+            'total_bookings' => $totalBookings,
+            'active_cash_bookings' => $activeCashBookings,
+            'total_cancellations' => $totalCancellations,
+            'cancellation_rate' => round($cancellationRate, 2),
+        ];
+    }
 }
