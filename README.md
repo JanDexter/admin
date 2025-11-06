@@ -51,14 +51,13 @@ A modern, full-featured web application built with Laravel 11, Inertia.js, and V
 
 ## 🚀 About This Project
 
-This project is a Customer Management Dashboard. It provides a comprehensive interface for managing customers, tasks, services, and users.
+This project is a Reservation System. 
 
 ## ✨ Features
 
 ### Core Management
 *   **User Roles:** Admin role with ability to create and manage other users.
 *   **Customer Management:** CRUD operations for customer records with standardized company name handling.
-*   **Task Management:** Assign and track tasks related to customers.
 *   **Service Management:** Define and manage services offered with automatic pricing.
 *   **User Management:** Admin-only interface to manage users with enhanced filtering.
 
