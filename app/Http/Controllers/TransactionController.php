@@ -63,6 +63,7 @@ class TransactionController extends Controller
             'totalRefunds' => abs(TransactionLog::where('type', 'refund')->sum('amount')),
             'netRevenue' => TransactionLog::where('type', 'payment')->sum('amount') + TransactionLog::where('type', 'refund')->sum('amount'),
             'totalCancellations' => TransactionLog::where('type', 'cancellation')->count(),
+            'pendingRefunds' => \App\Models\Refund::where('status', 'pending')->count(),
         ];
 
         return Inertia::render('Transactions/Index', [

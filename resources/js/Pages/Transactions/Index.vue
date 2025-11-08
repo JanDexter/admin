@@ -81,6 +81,36 @@ const applyTypeFilter = (type) => {
 
         <div class="py-8">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <!-- Pending Refunds Alert -->
+                <div v-if="summary.pendingRefunds > 0" class="mb-6 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-amber-500 p-4 shadow-md">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <div class="flex-shrink-0">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-900">
+                                    {{ summary.pendingRefunds }} Pending Refund {{ summary.pendingRefunds === 1 ? 'Request' : 'Requests' }}
+                                </h3>
+                                <p class="text-sm text-gray-700 mt-1">
+                                    Customer cancellation refund requests are awaiting your review and approval.
+                                </p>
+                            </div>
+                        </div>
+                        <Link
+                            :href="route('refunds.index', { status: 'pending' })"
+                            class="flex-shrink-0 inline-flex items-center gap-2 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg transition-colors shadow-md hover:shadow-lg"
+                        >
+                            <span>Review Refunds</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                            </svg>
+                        </Link>
+                    </div>
+                </div>
+
                 <!-- Summary Cards -->
                 <div class="mb-6 grid gap-4 sm:grid-cols-3">
                     <div class="rounded-xl bg-gradient-to-br from-green-500 to-green-600 p-6 text-white shadow-lg">

@@ -1099,10 +1099,16 @@ const updateOnlineStatus = () => {
 
                 <div v-if="refundInfo.refundAmount > 0" class="bg-white rounded-lg p-3 border border-blue-200">
                     <p class="text-xs text-gray-700">
-                        <strong>Refund will be processed to:</strong><br>
-                        {{ reservation.payment_method?.toUpperCase() }} account
+                        <strong>Refund Request Details:</strong><br>
+                        Amount: ₱{{ refundInfo.refundAmount }} to {{ reservation.payment_method?.toUpperCase() }} account
                     </p>
-                    <p class="text-xs text-gray-500 mt-1">Processing time: 3-5 business days</p>
+                    <p class="text-xs text-amber-600 mt-2 font-semibold flex items-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Pending Admin Approval
+                    </p>
+                    <p class="text-xs text-gray-500 mt-1">Your refund request will be reviewed and processed by an administrator. You will be notified once approved.</p>
                 </div>
             </div>
 

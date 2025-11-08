@@ -353,7 +353,7 @@ class PublicReservationController extends Controller
                     'original_amount_paid' => $reservation->amount_paid,
                     'cancellation_fee' => $cancellationFee,
                     'refund_method' => $reservation->payment_method,
-                    'status' => $refundAmount > 0 ? 'pending' : 'completed',
+                    'status' => $refundAmount > 0 ? 'pending' : 'completed', // All refunds are pending, awaiting admin approval
                     'reason' => 'Customer cancelled reservation',
                     'reference_number' => Refund::generateReferenceNumber(),
                     'notes' => sprintf(
@@ -363,21 +363,13 @@ class PublicReservationController extends Controller
                     ),
                 ]);
 
-                // If full refund (24+ hours), auto-complete it
-                if ($refundInfo['percentage'] >= 100) {
-                    $refund->update([
-                        'status' => 'completed',
-                        'processed_at' => now(),
-                    ]);
-                }
-
-                // Log the refund transaction
+                // Log the refund request (not yet processed)
                 if ($refundAmount > 0) {
                     TransactionLog::logRefund(
                         $reservation,
                         $refundAmount,
                         null, // Customer-initiated
-                        "Refund amount: ₱" . number_format($refundAmount, 2) . " | Cancellation fee: ₱" . number_format($cancellationFee, 2)
+                        "Refund request pending admin approval | Refund amount: ₱" . number_format($refundAmount, 2) . " | Cancellation fee: ₱" . number_format($cancellationFee, 2)
                     );
                 }
             }
@@ -388,9 +380,8 @@ class PublicReservationController extends Controller
         if ($reservation->amount_paid > 0) {
             if ($refundAmount > 0) {
                 $message .= sprintf(
-                    ' A refund of ₱%s will be processed to your %s account (Cancellation fee: ₱%s).',
+                    ' Your refund request of ₱%s has been submitted and is pending admin approval (Cancellation fee: ₱%s). You will be notified once processed.',
                     number_format($refundAmount, 2),
-                    strtoupper($reservation->payment_method),
                     number_format($cancellationFee, 2)
                 );
             } else {

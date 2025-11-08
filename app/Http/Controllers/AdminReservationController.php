@@ -202,7 +202,7 @@ class AdminReservationController extends Controller
                     'original_amount_paid' => $reservation->amount_paid,
                     'cancellation_fee' => $cancellationFee,
                     'refund_method' => $reservation->payment_method,
-                    'status' => $refundAmount > 0 ? 'pending' : 'completed',
+                    'status' => $refundAmount > 0 ? 'pending' : 'completed', // Admin cancellations also require approval
                     'reason' => $validated['reason'] ?? 'Admin cancelled reservation',
                     'reference_number' => Refund::generateReferenceNumber(),
                     'notes' => sprintf(
@@ -212,22 +212,13 @@ class AdminReservationController extends Controller
                     ),
                 ]);
 
-                // If full refund (24+ hours), auto-complete it
-                if ($refundInfo['percentage'] >= 100) {
-                    $refund->update([
-                        'status' => 'completed',
-                        'processed_by' => Auth::id(),
-                        'processed_at' => now(),
-                    ]);
-                }
-
-                // Log the refund transaction
+                // Log the refund request (pending approval)
                 if ($refundAmount > 0) {
                     TransactionLog::logRefund(
                         $reservation,
                         $refundAmount,
                         Auth::id(),
-                        "Admin refund - Amount: ₱" . number_format($refundAmount, 2) . " | Fee: ₱" . number_format($cancellationFee, 2)
+                        "Admin cancellation - Refund request pending approval | Amount: ₱" . number_format($refundAmount, 2) . " | Fee: ₱" . number_format($cancellationFee, 2)
                     );
                 }
             }
