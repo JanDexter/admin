@@ -9,6 +9,7 @@ use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\VerifyEmailController;
+use App\Http\Controllers\Auth\OtpVerificationController;
 use Illuminate\Support\Facades\Route;
 
 $adminLoginPath = trim(config('app.admin_login_path', 'coz-control-access'), '/');
@@ -44,6 +45,7 @@ Route::middleware('guest')->group(function () use ($adminLoginPath) {
 });
 
 Route::middleware('auth')->group(function () use ($adminAreaPrefix) {
+    // Admin email verification routes
     Route::get($adminAreaPrefix.'/verify-email', EmailVerificationPromptController::class)
         ->name('verification.notice');
 
@@ -54,6 +56,27 @@ Route::middleware('auth')->group(function () use ($adminAreaPrefix) {
     Route::post($adminAreaPrefix.'/email/verification-notification', [EmailVerificationNotificationController::class, 'store'])
         ->middleware('throttle:6,1')
         ->name('verification.send');
+
+    // Customer email verification routes (simpler URLs)
+    Route::get('verify-email', EmailVerificationPromptController::class)
+        ->name('customer.verification.notice');
+
+    // OTP verification routes
+    Route::post('verify-otp', [OtpVerificationController::class, 'verify'])
+        ->middleware('throttle:6,1')
+        ->name('otp.verify');
+
+    Route::post('resend-otp', [OtpVerificationController::class, 'resend'])
+        ->middleware('throttle:3,1')
+        ->name('otp.resend');
+
+    Route::get('verify-email/{id}/{hash}', VerifyEmailController::class)
+        ->middleware(['signed', 'throttle:6,1'])
+        ->name('customer.verification.verify');
+
+    Route::post('email/verification-notification', [EmailVerificationNotificationController::class, 'store'])
+        ->middleware('throttle:6,1')
+        ->name('customer.verification.send');
 
     Route::get($adminAreaPrefix.'/confirm-password', [ConfirmablePasswordController::class, 'show'])
         ->name('password.confirm');

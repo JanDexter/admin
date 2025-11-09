@@ -14,10 +14,17 @@ use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\AdminReservationController;
 use App\Http\Controllers\SetupController;
+use App\Http\Controllers\PasswordChangeController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get('/', CustomerViewController::class)->name('customer.view');
+Route::get('/my-transactions', [CustomerViewController::class, 'transactions'])->middleware(['auth', 'verified'])->name('customer.transactions');
+
+// Password change routes
+Route::post('/password/change/request', [PasswordChangeController::class, 'requestChange'])->middleware(['auth', 'verified'])->name('password.change.request');
+Route::get('/password/change/verify', [PasswordChangeController::class, 'verifyToken'])->name('password.change.verify');
+Route::post('/password/change/update', [PasswordChangeController::class, 'updatePassword'])->name('password.change.update');
 
 Route::get('/auth/google', [GoogleAuthController::class, 'redirectToGoogle'])->name('auth.google.redirect');
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'handleGoogleCallback'])->name('auth.google.callback');
@@ -49,9 +56,9 @@ Route::get('/health', function () {
 
 // Public reservation endpoints with rate limiting for security
 Route::middleware(['throttle:60,1'])->group(function () {
-    // Public reservation endpoint - requires authentication
+    // Public reservation endpoint - requires authentication AND email verification
     Route::post('/public/reservations', [PublicReservationController::class, 'store'])
-        ->middleware('auth')
+        ->middleware(['auth', 'verified'])
         ->name('public.reservations.store');
 
     // Check availability for specific time window - no auth required but rate limited
@@ -122,7 +129,7 @@ Route::middleware(['auth', 'can:admin-access'])->prefix($adminPrefix)->group(fun
     
     // Profile routes
     Route::get('profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::match(['patch', 'put'], 'profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     Route::get('calendar', [CalendarController::class, 'index'])->name('calendar');

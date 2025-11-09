@@ -5,10 +5,15 @@ namespace App\Http\Requests\Auth;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use App\Models\User;
+use App\Models\EmailVerificationOtp;
+use App\Mail\VerificationOtpMail;
+use Illuminate\Auth\Events\Registered;
 
 class LoginRequest extends FormRequest
 {
@@ -55,10 +60,44 @@ class LoginRequest extends FormRequest
         }
 
         if (! $user->is_active) {
-            RateLimiter::hit($this->throttleKey());
+            // Verify password first before proceeding
+            if (! Hash::check($this->string('password'), $user->password)) {
+                RateLimiter::hit($this->throttleKey());
+                throw ValidationException::withMessages([
+                    'email' => trans('auth.failed'),
+                ]);
+            }
 
+            // Check if email is verified
+            if (! $user->hasVerifiedEmail()) {
+                // New account that hasn't verified email yet - log them in temporarily
+                Auth::login($user, $this->boolean('remember'));
+                
+                // Generate and send OTP
+                $otp = EmailVerificationOtp::generateForUser($user);
+                Mail::to($user->email)->send(new VerificationOtpMail($user, $otp));
+                
+                RateLimiter::clear($this->throttleKey());
+                
+                // This will be caught by the controller to redirect to verification notice
+                throw ValidationException::withMessages([
+                    'unverified' => 'Please verify your email address to continue.',
+                ]);
+            }
+
+            // Account was deactivated but email is verified - allow reactivation
+            // Log them in temporarily and send reactivation OTP
+            Auth::login($user, $this->boolean('remember'));
+            
+            // Generate and send OTP for reactivation
+            $otp = EmailVerificationOtp::generateForUser($user);
+            Mail::to($user->email)->send(new VerificationOtpMail($user, $otp));
+            
+            RateLimiter::clear($this->throttleKey());
+            
+            // This will be caught by the controller to redirect to verification notice
             throw ValidationException::withMessages([
-                'email' => 'Your account has been deactivated. Please contact the administrator.',
+                'reactivation' => 'Your account has been deactivated. We\'ve sent a verification code to reactivate it.',
             ]);
         }
 

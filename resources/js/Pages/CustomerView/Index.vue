@@ -168,6 +168,13 @@ onMounted(() => {
 
     if (typeof document !== 'undefined') {
         document.addEventListener('visibilitychange', handleVisibilityChange);
+        
+        // Close user menu when clicking outside
+        document.addEventListener('click', (event) => {
+            if (showUserMenu.value && !event.target.closest('.relative')) {
+                showUserMenu.value = false;
+            }
+        });
     }
 
     // PWA: Monitor online/offline status
@@ -489,6 +496,18 @@ const bookingPax = ref(1);
 const showAvailability = ref(false);
 const isAuthenticated = computed(() => Boolean(props.auth?.user));
 const showAuthPrompt = ref(false);
+const showUserMenu = ref(false);
+const showTransactionHistory = ref(false);
+const showAccountSettings = ref(false);
+const customerTransactions = ref([]);
+const loadingTransactions = ref(false);
+const passwordChangeLoading = ref(false);
+const profileForm = ref({
+    name: '',
+    phone: '',
+    company_name: '',
+});
+const profileUpdateLoading = ref(false);
 const googleAuthUrl = computed(() => route('auth.google.redirect', { intent: 'customer' }));
 const loginUrl = computed(() => route('login'));
 const registerUrl = computed(() => route('register'));
@@ -518,6 +537,85 @@ watch(isAuthenticated, (value) => {
         showAuthPrompt.value = false;
     }
 });
+
+// Fetch transactions when modal opens
+const fetchTransactions = async () => {
+    if (!isAuthenticated.value || loadingTransactions.value) return;
+    
+    loadingTransactions.value = true;
+    try {
+        const response = await fetch(route('customer.transactions'));
+        const data = await response.json();
+        customerTransactions.value = data.transactions || [];
+    } catch (error) {
+        console.error('Failed to fetch transactions:', error);
+        customerTransactions.value = [];
+    } finally {
+        loadingTransactions.value = false;
+    }
+};
+
+watch(showTransactionHistory, (isOpen) => {
+    if (isOpen && customerTransactions.value.length === 0) {
+        fetchTransactions();
+    }
+});
+
+// Initialize profile form when account settings modal opens
+watch(showAccountSettings, (isOpen) => {
+    if (isOpen && props.auth?.user) {
+        profileForm.value = {
+            name: props.auth.user.name || '',
+            phone: props.auth.user.phone || '',
+            company_name: props.auth.user.company_name || '',
+        };
+    }
+});
+
+// Update profile information
+const updateProfile = () => {
+    if (profileUpdateLoading.value) return;
+    
+    profileUpdateLoading.value = true;
+    
+    router.put(route('profile.update'), profileForm.value, {
+        preserveScroll: true,
+        onSuccess: () => {
+            showToast('Profile updated successfully!', 'success');
+            profileUpdateLoading.value = false;
+        },
+        onError: (errors) => {
+            showToast(errors.message || 'Failed to update profile.', 'error');
+            profileUpdateLoading.value = false;
+        },
+        onFinish: () => {
+            profileUpdateLoading.value = false;
+        },
+    });
+};
+
+// Request password change with email verification
+const requestPasswordChange = () => {
+    if (passwordChangeLoading.value) return;
+    
+    passwordChangeLoading.value = true;
+    
+    router.post(route('password.change.request'), {}, {
+        preserveScroll: true,
+        onSuccess: () => {
+            showToast('Password change link sent! Check your email.', 'success');
+            showAccountSettings.value = false;
+            passwordChangeLoading.value = false;
+        },
+        onError: (errors) => {
+            showToast(errors.message || 'Failed to send verification email.', 'error');
+            passwordChangeLoading.value = false;
+        },
+        onFinish: () => {
+            passwordChangeLoading.value = false;
+        },
+    });
+};
 
 const minBookingDate = computed(() => currentManilaTime.value.date);
 const minBookingTime = computed(() =>
@@ -1143,7 +1241,7 @@ const copyToClipboard = async (text, label = 'Text') => {
     <Head title="CO-Z Co-Workspace & Study Hub" />
     <div class="min-h-screen bg-[#eef3ff] text-[#0b0c10]">
         <header class="bg-white shadow-sm">
-            <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-4">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-4 flex items-center justify-between gap-4">
                 <div class="flex items-center gap-3">
                     <img :src="logo" alt="CO-Z Co-Workspace & Study Hub" class="h-12 w-auto" />
                     <div class="hidden sm:flex flex-col leading-snug">
@@ -1189,6 +1287,8 @@ const copyToClipboard = async (text, label = 'Text') => {
                         <span class="hidden sm:inline">Book a Space</span>
                         <span class="sm:hidden">Book Now</span>
                     </a>
+                    
+                    <!-- Sign In Button -->
                     <button
                         v-if="!isAuthenticated"
                         type="button"
@@ -1197,19 +1297,84 @@ const copyToClipboard = async (text, label = 'Text') => {
                     >
                         Sign in
                     </button>
-                    <button
-                        v-else
-                        type="button"
-                        @click="handleSignOut"
-                        class="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold uppercase tracking-wide text-[#2f4686] hover:text-[#3956a3]"
-                    >
-                        Sign out
-                    </button>
+                    
+                    <!-- User Dropdown Menu -->
+                    <div v-else class="relative">
+                        <button
+                            type="button"
+                            @click="showUserMenu = !showUserMenu"
+                            class="flex items-center gap-2 text-xs sm:text-sm font-semibold text-[#2f4686] hover:text-[#3956a3] focus:outline-none"
+                        >
+                            <div class="h-8 w-8 rounded-full bg-gradient-to-br from-[#2f4686] to-[#3956a3] flex items-center justify-center text-white font-bold text-sm shadow-md">
+                                {{ auth.user?.name?.charAt(0).toUpperCase() || 'U' }}
+                            </div>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" :class="{ 'rotate-180': showUserMenu }" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+                        
+                        <!-- Dropdown Menu -->
+                        <transition
+                            enter-active-class="transition ease-out duration-200"
+                            enter-from-class="transform opacity-0 scale-95"
+                            enter-to-class="transform opacity-100 scale-100"
+                            leave-active-class="transition ease-in duration-150"
+                            leave-from-class="transform opacity-100 scale-100"
+                            leave-to-class="transform opacity-0 scale-95"
+                        >
+                            <div
+                                v-if="showUserMenu"
+                                class="absolute right-0 mt-2 w-56 origin-top-right rounded-xl bg-white shadow-xl ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 z-50"
+                                @click.stop
+                            >
+                                <!-- User Info -->
+                                <div class="px-4 py-3">
+                                    <p class="text-sm font-semibold text-gray-900">{{ auth.user?.name }}</p>
+                                    <p class="text-xs text-gray-500 truncate">{{ auth.user?.email }}</p>
+                                </div>
+                                
+                                <!-- Menu Items -->
+                                <div class="py-1">
+                                    <button
+                                        @click="showTransactionHistory = true; showUserMenu = false"
+                                        class="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                        </svg>
+                                        <span>Transaction History</span>
+                                    </button>
+                                    <button
+                                        @click="showAccountSettings = true; showUserMenu = false"
+                                        class="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                        </svg>
+                                        <span>Account Settings</span>
+                                    </button>
+                                </div>
+                                
+                                <!-- Sign Out -->
+                                <div class="py-1">
+                                    <button
+                                        @click="handleSignOut"
+                                        class="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                        </svg>
+                                        <span>Sign Out</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </transition>
+                    </div>
                 </nav>
             </div>
         </header>
 
-                <main class="space-y-12">
+                <main class="space-y-12 pt-6">
                     <section class="w-full">
                         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10">
                             <article
@@ -1310,14 +1475,14 @@ const copyToClipboard = async (text, label = 'Text') => {
                     </section>
 
                     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-12 space-y-12">
-                        <section class="grid gap-8 items-start">
+                        <section class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
                             <article id="location" class="bg-white rounded-3xl shadow-lg overflow-hidden flex flex-col">
                                 <div class="p-6 md:p-7 space-y-3">
                                     <p class="uppercase text-xs tracking-[0.35em] text-[#ff6b35]">Where is CO-Z located?</p>
                                     <h2 class="text-xl md:text-2xl font-semibold text-[#2f4686]">We are across Holy Cross of Davao College</h2>
                                     <p class="text-sm text-slate-600">Corner Monteverde and Narra Street, Davao City. Landmarks include McDonald’s, BPI, and Craft Shop.</p>
                                 </div>
-                                <div class="relative h-64 md:h-96">
+                                <div class="relative flex-1 min-h-[300px]">
                                     <iframe
                                         src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3959.437653207681!2d125.61698390000001!3d7.075150600000001!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x44b5c51ae0e0e1ff%3A0x3cd38af7400ae41d!2sCO-Z%20co-workspace%20%26%20study%20hub!5e0!3m2!1sen!2sph!4v1760885073382!5m2!1sen!2sph"
                                         class="absolute inset-0 w-full h-full border-0"
@@ -1334,6 +1499,38 @@ const copyToClipboard = async (text, label = 'Text') => {
                                             <path d="M12 2C8.144 2 5 5.144 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.856-3.144-7-7-7zm0 9.5c-1.38 0-2.5-1.121-2.5-2.5S10.62 6.5 12 6.5s2.5 1.121 2.5 2.5S13.38 11.5 12 11.5z" />
                                         </svg>
                                     </a>
+                                </div>
+                            </article>
+
+                            <!-- Connect with Us Section -->
+                            <article class="bg-gradient-to-br from-[#2f4686] to-[#3956a3] rounded-3xl shadow-lg overflow-hidden flex flex-col">
+                                <div class="p-8 md:p-10 flex flex-col justify-center items-center text-center space-y-6 flex-1">
+                                    <div class="flex justify-center">
+                                        <div class="inline-flex items-center gap-2 bg-white/10 px-4 py-2 rounded-full">
+                                            <span class="h-2 w-2 rounded-full bg-[#ff6b35] animate-pulse" />
+                                            <p class="uppercase text-xs tracking-[0.35em] text-white/90">Stay Connected</p>
+                                        </div>
+                                    </div>
+                                    <h2 class="text-2xl md:text-3xl font-semibold text-white">Follow Us on Facebook</h2>
+                                    <p class="text-white/80 max-w-md">
+                                        Stay updated with our latest promotions, events, and community stories. Join our growing community of co-workers and students!
+                                    </p>
+                                    <div class="pt-2">
+                                        <a 
+                                            href="https://www.facebook.com/COZeeNarra" 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            class="inline-flex items-center justify-center gap-3 bg-white hover:bg-white/90 text-[#2f4686] font-semibold text-sm md:text-base tracking-wide uppercase px-8 py-4 rounded-full transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+                                                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                                            </svg>
+                                            <span>Visit @COZeeNarra</span>
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                            </svg>
+                                        </a>
+                                    </div>
                                 </div>
                             </article>
                             
@@ -1692,11 +1889,23 @@ const copyToClipboard = async (text, label = 'Text') => {
         />
 
         <footer class="mt-12 bg-white border-t border-slate-200">
-            <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-sm text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-3">
-                <p>&copy; {{ new Date().getFullYear() }} CO-Z Co-Workspace & Study Hub. All rights reserved.</p>
-                <div class="flex items-center gap-4 text-xs">
-                    <span>Follow us @cozworskspace</span>
-                    <span>Mon - Sat: 9 AM – 12 AM</span>
+            <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-sm text-slate-500">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <p>&copy; {{ new Date().getFullYear() }} CO-Z Co-Workspace & Study Hub. All rights reserved.</p>
+                    <div class="flex items-center gap-5">
+                        <a 
+                            href="https://www.facebook.com/COZeeNarra" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            class="flex items-center gap-2 text-[#2f4686] hover:text-[#3956a3] transition-colors font-medium"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                            </svg>
+                            <span class="text-xs">Follow us @COZeeNarra</span>
+                        </a>
+                        <span class="text-xs text-slate-400">Mon - Sat: 9 AM – 12 AM</span>
+                    </div>
                 </div>
             </div>
         </footer>
@@ -2108,6 +2317,211 @@ const copyToClipboard = async (text, label = 'Text') => {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Transaction History Modal -->
+        <div v-if="showTransactionHistory" class="fixed inset-0 z-50">
+            <div class="absolute inset-0 bg-black/60" @click="showTransactionHistory = false" />
+            <div class="relative z-10 max-w-4xl w-11/12 sm:w-full mx-auto mt-12 bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+                <div class="px-6 py-5 border-b flex items-center justify-between bg-gradient-to-r from-[#2f4686] to-[#3956a3] text-white">
+                    <div>
+                        <h3 class="text-xl font-bold">Transaction History</h3>
+                        <p class="text-sm opacity-90 mt-1">All your payments, refunds, and cancellations</p>
+                    </div>
+                    <button class="h-9 w-9 inline-flex items-center justify-center rounded-full hover:bg-white/20" @click="showTransactionHistory = false" aria-label="Close">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="flex-1 overflow-y-auto px-6 py-5">
+                    <!-- Loading State -->
+                    <div v-if="loadingTransactions" class="flex items-center justify-center py-12">
+                        <div class="flex flex-col items-center gap-3">
+                            <svg class="animate-spin h-10 w-10 text-[#2f4686]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <p class="text-sm text-gray-600">Loading transactions...</p>
+                        </div>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div v-else-if="customerTransactions.length === 0" class="flex flex-col items-center justify-center py-12">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-gray-300 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        <h4 class="text-lg font-semibold text-gray-700 mb-2">No Transactions Yet</h4>
+                        <p class="text-sm text-gray-500">Your transaction history will appear here once you make a booking.</p>
+                    </div>
+
+                    <!-- Transaction List -->
+                    <div v-else class="space-y-4">
+                        <div 
+                            v-for="transaction in customerTransactions" 
+                            :key="transaction.id"
+                            class="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow"
+                        >
+                            <div class="flex items-start justify-between gap-4">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-3 mb-2">
+                                        <!-- Transaction Type Badge -->
+                                        <span 
+                                            class="px-3 py-1 rounded-full text-xs font-semibold uppercase"
+                                            :class="{
+                                                'bg-green-100 text-green-700': transaction.type === 'payment',
+                                                'bg-orange-100 text-orange-700': transaction.type === 'refund',
+                                                'bg-red-100 text-red-700': transaction.type === 'cancellation'
+                                            }"
+                                        >
+                                            {{ transaction.type }}
+                                        </span>
+                                        <span class="text-xs text-gray-500">
+                                            {{ formatDate(transaction.created_at) }} {{ formatTime(transaction.created_at) }}
+                                        </span>
+                                    </div>
+
+                                    <!-- Transaction Details -->
+                                    <p class="text-sm text-gray-700 mb-1">
+                                        <strong>{{ transaction.reservation?.space_type?.name || 'Space' }}</strong>
+                                    </p>
+                                    <p v-if="transaction.description" class="text-xs text-gray-600 mb-2">
+                                        {{ transaction.description }}
+                                    </p>
+
+                                    <!-- Reservation Time -->
+                                    <div v-if="transaction.reservation" class="text-xs text-gray-500 space-y-0.5">
+                                        <p><strong>Start:</strong> {{ formatDate(transaction.reservation.start_time) }} {{ formatTime(transaction.reservation.start_time) }}</p>
+                                        <p><strong>End:</strong> {{ formatDate(transaction.reservation.end_time) }} {{ formatTime(transaction.reservation.end_time) }}</p>
+                                    </div>
+
+                                    <!-- Reference Number -->
+                                    <p v-if="transaction.reference_number" class="text-xs text-gray-400 mt-2">
+                                        Ref: {{ transaction.reference_number }}
+                                    </p>
+                                </div>
+
+                                <!-- Amount -->
+                                <div class="text-right">
+                                    <p 
+                                        class="text-lg font-bold"
+                                        :class="{
+                                            'text-green-600': transaction.type === 'payment',
+                                            'text-orange-600': transaction.type === 'refund',
+                                            'text-gray-600': transaction.type === 'cancellation'
+                                        }"
+                                    >
+                                        {{ transaction.type === 'refund' ? '+' : '' }}{{ formatCurrency(Math.abs(transaction.amount)) }}
+                                    </p>
+                                    <p v-if="transaction.payment_method" class="text-xs text-gray-500 uppercase mt-1">
+                                        {{ transaction.payment_method }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Account Settings Modal -->
+        <div v-if="showAccountSettings" class="fixed inset-0 z-50">
+            <div class="absolute inset-0 bg-black/60" @click="showAccountSettings = false" />
+            <div class="relative z-10 max-w-2xl w-11/12 sm:w-full mx-auto mt-12 bg-white rounded-2xl shadow-2xl overflow-hidden">
+                <div class="px-6 py-5 border-b flex items-center justify-between bg-gradient-to-r from-[#2f4686] to-[#3956a3] text-white">
+                    <div>
+                        <h3 class="text-xl font-bold">Account Settings</h3>
+                        <p class="text-sm opacity-90 mt-1">Manage your profile information</p>
+                    </div>
+                    <button class="h-9 w-9 inline-flex items-center justify-center rounded-full hover:bg-white/20" @click="showAccountSettings = false" aria-label="Close">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="px-6 py-6 space-y-6">
+                    <!-- Profile Information (Editable) -->
+                    <div class="space-y-4">
+                        <h4 class="text-sm font-bold text-gray-900 uppercase tracking-wide">Profile Information</h4>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Name *</label>
+                            <input 
+                                type="text" 
+                                v-model="profileForm.name"
+                                required
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2f4686] focus:border-transparent"
+                                placeholder="Enter your name"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Email</label>
+                            <input 
+                                type="email" 
+                                :value="auth.user?.email" 
+                                readonly
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+                            />
+                            <p class="mt-1 text-xs text-gray-500">Email cannot be changed for security reasons</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Phone</label>
+                            <input 
+                                type="tel" 
+                                v-model="profileForm.phone"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2f4686] focus:border-transparent"
+                                placeholder="Enter your phone number"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Company (Optional)</label>
+                            <input 
+                                type="text" 
+                                v-model="profileForm.company_name"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2f4686] focus:border-transparent"
+                                placeholder="Enter your company name"
+                            />
+                        </div>
+                        
+                        <!-- Save Button -->
+                        <button
+                            @click="updateProfile"
+                            :disabled="profileUpdateLoading"
+                            class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-[#2f4686] to-[#3956a3] hover:from-[#3956a3] hover:to-[#2f4686] text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <svg v-if="profileUpdateLoading" class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span>{{ profileUpdateLoading ? 'Saving...' : 'Save Changes' }}</span>
+                        </button>
+                    </div>
+
+                    <!-- Password Change Section -->
+                    <div class="pt-6 border-t space-y-4">
+                        <h4 class="text-sm font-bold text-gray-900 uppercase tracking-wide">Change Password</h4>
+                        <button
+                            @click="requestPasswordChange"
+                            :disabled="passwordChangeLoading"
+                            class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#2f4686] hover:bg-[#3956a3] text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <svg v-if="passwordChangeLoading" class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                            </svg>
+                            <span>{{ passwordChangeLoading ? 'Sending...' : 'Request Password Change' }}</span>
+                        </button>
+                        <p class="text-xs text-gray-500">
+                            We'll send a verification link to <strong>{{ auth.user?.email }}</strong>. Click the link to set your new password.
+                        </p>
                     </div>
                 </div>
             </div>

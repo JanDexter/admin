@@ -32,7 +32,25 @@ class AuthenticatedSessionController extends Controller
      */
     public function store(LoginRequest $request): RedirectResponse
     {
-        $request->authenticate();
+        try {
+            $request->authenticate();
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            // Check if this is an unverified account
+            if (isset($e->errors()['unverified'])) {
+                // User is logged in but needs to verify email
+                return redirect()->route('customer.verification.notice')
+                    ->with('status', 'verification-link-sent');
+            }
+            
+            // Check if this is a reactivation request
+            if (isset($e->errors()['reactivation'])) {
+                // User is logged in but needs to verify email to reactivate
+                return redirect()->route('customer.verification.notice')
+                    ->with('status', 'reactivation-requested');
+            }
+            // Re-throw other validation exceptions
+            throw $e;
+        }
 
     session()->regenerate();
 
