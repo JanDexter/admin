@@ -1,22 +1,31 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import logo from '../../img/logo.png';
+import slide1 from '../../img/slideshow/Shared Space.jpg';
+import slide2 from '../../img/slideshow/Private Space.jpg';
+import slide3 from '../../img/slideshow/Exclusive Space.jpg';
+import slide4 from '../../img/slideshow/Conference Room.png';
 
 const slides = [
     {
-        image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=2069',
+        image: slide1,
         title: 'Modern Co-Working Space',
         description: 'Discover your perfect workspace in a professional environment'
     },
     {
-        image: 'https://images.unsplash.com/photo-1497366811353-6870744d04b2?q=80&w=2069',
-        title: 'Collaborative Environment',
-        description: 'Connect with professionals and grow your network'
+        image: slide2,
+        title: 'Private Workspaces',
+        description: 'Focus and productivity in your own dedicated space'
     },
     {
-        image: 'https://images.unsplash.com/photo-1524758631624-e2822e304c36?q=80&w=2070',
-        title: 'Flexible Booking',
-        description: 'Book by the hour, day, or month - whatever suits your needs'
+        image: slide3,
+        title: 'Exclusive Workspace',
+        description: 'Premium dedicated areas for your team or projects'
+    },
+    {
+        image: slide4,
+        title: 'Conference Room',
+        description: 'Professional meeting space for collaboration and presentations'
     }
 ];
 
