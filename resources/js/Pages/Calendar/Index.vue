@@ -196,12 +196,15 @@ const getCalendarOptions = (spaceTypeId) => {
     <Head title="Calendar" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <h2 class="font-semibold text-xl text-gray-800 leading-tight">Calendar</h2>
-        </template>
-
         <div class="py-12">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center mb-8">
+                    <div>
+                        <h2 class="font-semibold text-2xl text-gray-800 leading-tight">Calendar</h2>
+                        <p class="text-sm text-gray-600 mt-1">View and manage all reservations across different time periods</p>
+                    </div>
+                </div>
+                
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
                     <!-- Tabbed Navigation for Space Types -->
                     <div class="mb-4 border-b border-gray-200">

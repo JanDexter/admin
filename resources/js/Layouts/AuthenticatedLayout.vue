@@ -34,7 +34,7 @@ const showingNavigationDropdown = ref(false);
                                     User Management
                                 </NavLink>
                                 <NavLink 
-                                    v-if="$page.props.auth.user.role === 'admin' || $page.props.auth.can.admin_access"
+                                    v-if="$page.props.auth.user.is_admin || $page.props.auth.can.admin_access"
                                     :href="route('space-management.index')" 
                                     :active="route().current('space-management.*')"
                                 >
@@ -157,7 +157,7 @@ const showingNavigationDropdown = ref(false);
                         
                         <!-- User Management (Admin only) -->
                         <ResponsiveNavLink
-                            v-if="$page.props.auth.user.role === 'admin'"
+                            v-if="$page.props.auth.user.is_admin"
                             :href="route('user-management.index')"
                             :active="route().current('user-management.*')"
                         >
@@ -166,7 +166,7 @@ const showingNavigationDropdown = ref(false);
                         
                         <!-- Space Management (Admin only) -->
                         <ResponsiveNavLink
-                            v-if="$page.props.auth.user.role === 'admin' || $page.props.auth.can.admin_access"
+                            v-if="$page.props.auth.user.is_admin || $page.props.auth.can.admin_access"
                             :href="route('space-management.index')"
                             :active="route().current('space-management.*')"
                         >

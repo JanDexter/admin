@@ -5,6 +5,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\UserManagementController;
+use App\Http\Controllers\UserPermissionController;
 use App\Http\Controllers\SpaceManagementController;
 use App\Http\Controllers\PublicReservationController;
 use App\Http\Controllers\CustomerViewController;
@@ -13,6 +14,7 @@ use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\AdminReservationController;
+use App\Http\Controllers\RefundController;
 use App\Http\Controllers\SetupController;
 use App\Http\Controllers\PasswordChangeController;
 use Illuminate\Support\Facades\Route;
@@ -100,6 +102,12 @@ Route::middleware(['auth', 'can:admin-access'])->prefix($adminPrefix)->group(fun
         Route::get('user-management/{user}/edit', [UserManagementController::class, 'edit'])->name('user-management.edit');
         Route::match(['put', 'patch'], 'user-management/{user}', [UserManagementController::class, 'update'])->name('user-management.update');
         Route::patch('user-management/{user}/toggle-status', [UserManagementController::class, 'toggleStatus'])->name('user-management.toggle-status');
+        
+        // Permission management routes
+        Route::get('user-management/{user}/permissions', [UserPermissionController::class, 'edit'])->name('user-permissions.edit');
+        Route::put('user-management/{user}/permissions', [UserPermissionController::class, 'update'])->name('user-permissions.update');
+        Route::post('user-management/{user}/permissions/preset', [UserPermissionController::class, 'applyPreset'])->name('user-permissions.apply-preset');
+        Route::post('user-management/{user}/permissions/toggle', [UserPermissionController::class, 'togglePermission'])->name('user-permissions.toggle');
     });
     
     // Space management routes (Admin only)

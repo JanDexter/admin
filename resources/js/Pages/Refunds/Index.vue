@@ -111,7 +111,10 @@ const getStatusClass = (status) => {
 
     <AuthenticatedLayout>
         <template #header>
-            <h2 class="text-xl font-semibold leading-tight text-gray-800">Refund Management</h2>
+            <div>
+                <h2 class="text-xl font-semibold leading-tight text-gray-800">Refund Management</h2>
+                <p class="text-sm text-gray-600 mt-1">Review and process refund requests from customers</p>
+            </div>
         </template>
 
         <div class="py-12">

@@ -44,7 +44,10 @@ const formatDate = (dateString) => {
     <AuthenticatedLayout>
         <template #header>
             <div class="flex justify-between items-center">
-                <h2 class="font-semibold text-xl text-gray-800 leading-tight">Customers</h2>
+                <div>
+                    <h2 class="font-semibold text-xl text-gray-800 leading-tight">Customers</h2>
+                    <p class="text-sm text-gray-600 mt-1">Manage customer information and reservations</p>
+                </div>
                 <Link
                     :href="route('customers.create')"
                     class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"

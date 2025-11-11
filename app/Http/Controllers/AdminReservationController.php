@@ -129,6 +129,41 @@ class AdminReservationController extends Controller
 
             if (array_key_exists('amount_paid', $validated)) {
                 $reservation->amount_paid = $newAmount;
+                
+                // Create transaction log if payment amount changed
+                if ($newAmount != $originalAmount) {
+                    $paymentDiff = $newAmount - $originalAmount;
+                    
+                    if ($paymentDiff > 0) {
+                        // Payment added
+                        TransactionLog::create([
+                            'type' => 'payment',
+                            'reservation_id' => $reservation->id,
+                            'customer_id' => $reservation->customer_id,
+                            'processed_by' => auth()->id(),
+                            'amount' => $paymentDiff,
+                            'payment_method' => $validated['payment_method'] ?? $reservation->payment_method ?? 'cash',
+                            'status' => $validated['status'] ?? $reservation->status,
+                            'reference_number' => TransactionLog::generateReferenceNumber('payment'),
+                            'description' => "Payment adjustment: ₱" . number_format($paymentDiff, 2) . " added for reservation #{$reservation->id}",
+                            'notes' => $validated['notes'] ?? null,
+                        ]);
+                    } elseif ($paymentDiff < 0) {
+                        // Payment reduced (refund)
+                        TransactionLog::create([
+                            'type' => 'refund',
+                            'reservation_id' => $reservation->id,
+                            'customer_id' => $reservation->customer_id,
+                            'processed_by' => auth()->id(),
+                            'amount' => $paymentDiff, // Negative amount
+                            'payment_method' => $validated['payment_method'] ?? $reservation->payment_method ?? 'cash',
+                            'status' => 'approved',
+                            'reference_number' => TransactionLog::generateReferenceNumber('refund'),
+                            'description' => "Payment adjustment: ₱" . number_format(abs($paymentDiff), 2) . " refunded for reservation #{$reservation->id}",
+                            'notes' => $validated['notes'] ?? null,
+                        ]);
+                    }
+                }
             }
 
             $reservation->save();

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Customer;
+use App\Models\Admin;
 use App\Models\EmailVerificationOtp;
 use App\Mail\VerificationOtpMail;
 use Illuminate\Auth\Events\Registered;
@@ -50,12 +51,18 @@ class RegisteredUserController extends Controller
             'email' => $request->email,
             'phone' => $request->phone,
             'password' => $request->password, // Use the validated password directly
-            'role' => $isFirstUser ? User::ROLE_ADMIN : User::ROLE_CUSTOMER,
             'is_active' => $isFirstUser ? true : false, // First user (admin) is active, others must verify email
         ]);
 
-        // Automatically create a Customer record for customer users
-        if ($user->role === User::ROLE_CUSTOMER) {
+        // First user becomes admin, others become customers
+        if ($isFirstUser) {
+            Admin::create([
+                'user_id' => $user->id,
+                'permission_level' => 'super_admin',
+                'permissions' => ['*'],
+            ]);
+        } else {
+            // Automatically create a Customer record for new users
             Customer::create([
                 'user_id' => $user->id,
                 'name' => $request->name,

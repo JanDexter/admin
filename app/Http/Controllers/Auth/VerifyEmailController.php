@@ -33,7 +33,7 @@ class VerifyEmailController extends Controller
             $user->save();
 
             // If customer, update their status to active
-            if ($user->role === \App\Models\User::ROLE_CUSTOMER) {
+            if ($user->isCustomer()) {
                 $customer = Customer::where('user_id', $user->id)->first();
                 if ($customer) {
                     $customer->status = 'active';

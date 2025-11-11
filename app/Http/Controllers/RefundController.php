@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Refund;
 use App\Models\Reservation;
+use App\Models\TransactionLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -85,6 +86,20 @@ class RefundController extends Controller
                     ? ($refund->notes ? $refund->notes . "\n" . $validated['notes'] : $validated['notes'])
                     : $refund->notes,
             ]);
+
+            // Create transaction log for refund
+            TransactionLog::create([
+                'type' => 'refund',
+                'reservation_id' => $refund->reservation_id,
+                'customer_id' => $refund->reservation->customer_id ?? null,
+                'processed_by' => Auth::id(),
+                'amount' => -abs($refund->refund_amount), // Negative amount for refund
+                'payment_method' => $refund->refund_method,
+                'status' => 'approved',
+                'reference_number' => $refund->reference_number,
+                'description' => "Refund of ₱" . number_format($refund->refund_amount, 2) . " for cancelled reservation #{$refund->reservation_id}",
+                'notes' => $refund->reason . ($validated['notes'] ? ' - ' . $validated['notes'] : ''),
+            ]);
         });
 
         return back()->with('success', sprintf(
@@ -150,6 +165,20 @@ class RefundController extends Controller
             $reservation->notes = ($reservation->notes ? $reservation->notes . "\n" : '') 
                 . 'ADMIN CANCELLED: ' . $validated['reason'];
             $reservation->save();
+
+            // Create cancellation transaction log
+            TransactionLog::create([
+                'type' => 'cancellation',
+                'reservation_id' => $reservation->id,
+                'customer_id' => $reservation->customer_id,
+                'processed_by' => Auth::id(),
+                'amount' => 0,
+                'payment_method' => $reservation->payment_method,
+                'status' => 'cancelled',
+                'reference_number' => TransactionLog::generateReferenceNumber('cancellation'),
+                'description' => "Reservation #{$reservation->id} cancelled by admin",
+                'notes' => $validated['reason'],
+            ]);
 
             // Create refund record if payment was made
             if ($reservation->amount_paid > 0) {

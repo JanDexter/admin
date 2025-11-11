@@ -2,6 +2,18 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
+import { 
+    UserGroupIcon, 
+    ShieldCheckIcon, 
+    UserIcon, 
+    UsersIcon, 
+    CheckCircleIcon, 
+    XCircleIcon,
+    PlusIcon,
+    MagnifyingGlassIcon,
+    ChevronLeftIcon,
+    ChevronRightIcon
+} from '@heroicons/vue/24/solid';
 
 const onRowClick = (user, event) => {
     if (event.target.closest('a, button, input')) {
@@ -77,17 +89,16 @@ const toggleUserStatus = (user) => {
         <div class="py-12">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
                 <div class="flex justify-between items-center mb-8">
-                    <div class="flex items-center gap-4">
+                    <div>
                         <h2 class="font-semibold text-2xl text-gray-800 leading-tight">User Management</h2>
+                        <p class="text-sm text-gray-600 mt-1">Manage system users, roles, and access permissions</p>
                     </div>
                     <div>
                         <Link
                             :href="route('user-management.create')"
                             class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
                         >
-                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                            </svg>
+                            <PlusIcon class="w-4 h-4 mr-2" />
                             Add User
                         </Link>
                     </div>
@@ -99,9 +110,7 @@ const toggleUserStatus = (user) => {
                             <div class="flex items-center">
                                 <div class="flex-shrink-0">
                                     <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"/>
-                                        </svg>
+                                        <UserGroupIcon class="w-4 h-4 text-white" />
                                     </div>
                                 </div>
                                 <div class="ml-5 w-0 flex-1">
@@ -119,9 +128,7 @@ const toggleUserStatus = (user) => {
                             <div class="flex items-center">
                                 <div class="flex-shrink-0">
                                     <div class="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
-                                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                        </svg>
+                                        <ShieldCheckIcon class="w-4 h-4 text-white" />
                                     </div>
                                 </div>
                                 <div class="ml-5 w-0 flex-1">
@@ -139,9 +146,7 @@ const toggleUserStatus = (user) => {
                             <div class="flex items-center">
                                 <div class="flex-shrink-0">
                                     <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6z"/>
-                                        </svg>
+                                        <UserIcon class="w-4 h-4 text-white" />
                                     </div>
                                 </div>
                                 <div class="ml-5 w-0 flex-1">
@@ -159,9 +164,7 @@ const toggleUserStatus = (user) => {
                             <div class="flex items-center">
                                 <div class="flex-shrink-0">
                                     <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"/>
-                                        </svg>
+                                        <UsersIcon class="w-4 h-4 text-white" />
                                     </div>
                                 </div>
                                 <div class="ml-5 w-0 flex-1">
@@ -179,9 +182,7 @@ const toggleUserStatus = (user) => {
                             <div class="flex items-center">
                                 <div class="flex-shrink-0">
                                     <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
-                                        </svg>
+                                        <CheckCircleIcon class="w-4 h-4 text-white" />
                                     </div>
                                 </div>
                                 <div class="ml-5 w-0 flex-1">
@@ -199,9 +200,7 @@ const toggleUserStatus = (user) => {
                             <div class="flex items-center">
                                 <div class="flex-shrink-0">
                                     <div class="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
-                                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M10 2L3 7v11a2 2 0 002 2h4v-6h2v6h4a2 2 0 002-2V7l-7-5z"/>
-                                        </svg>
+                                        <XCircleIcon class="w-4 h-4 text-white" />
                                     </div>
                                 </div>
                                 <div class="ml-5 w-0 flex-1">
@@ -223,9 +222,7 @@ const toggleUserStatus = (user) => {
                             <div class="flex-1 max-w-md">
                                 <div class="relative">
                                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                                        </svg>
+                                        <MagnifyingGlassIcon class="h-5 w-5 text-gray-400" />
                                     </div>
                                     <input
                                         v-model="searchQuery"
@@ -292,8 +289,8 @@ const toggleUserStatus = (user) => {
                                         {{ user.phone || '-' }}
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        <span :class="`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleColor(user.role)}`">
-                                            {{ user.role.toUpperCase() }}
+                                        <span :class="`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleColor(user.role_type)}`">
+                                            {{ user.role_type.toUpperCase() }}
                                         </span>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
@@ -345,9 +342,7 @@ const toggleUserStatus = (user) => {
                                     @click="router.get(users.prev_page_url)"
                                     class="p-1 text-gray-400 hover:text-gray-600"
                                 >
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                                    </svg>
+                                    <ChevronLeftIcon class="w-5 h-5" />
                                 </button>
                                 <span class="text-sm text-gray-700">{{ users.current_page }}/{{ users.last_page }}</span>
                                 <button
@@ -355,9 +350,7 @@ const toggleUserStatus = (user) => {
                                     @click="router.get(users.next_page_url)"
                                     class="p-1 text-gray-400 hover:text-gray-600"
                                 >
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                                    </svg>
+                                    <ChevronRightIcon class="w-5 h-5" />
                                 </button>
                             </div>
                         </div>

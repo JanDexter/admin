@@ -769,7 +769,8 @@ const showPaymentModal = ref(false);
 const selectedSpace = ref(null);
 const selectedPayment = ref(null); // 'gcash' | 'maya' | 'cash'
 const paymentStatus = ref(null); // { type: 'success' | 'hold' }
-const paymentStep = ref(1); // 1: customer details, 2: payment method, 3: confirmation
+const paymentStep = ref(1); // 1: customer details, 2: payment method, 3: review/confirm, 4: confirmation
+const agreeToTerms = ref(false);
 
 // Customer details form
 const customerDetails = ref({
@@ -803,6 +804,7 @@ const openPayment = (space) => {
     selectedPayment.value = null;
     paymentStatus.value = null;
     paymentStep.value = 1;
+    agreeToTerms.value = false;
     customerDetails.value = {
         name: props.auth.user?.name || '',
         email: props.auth.user?.email || '',
@@ -817,6 +819,7 @@ const closePayment = () => {
     showPaymentModal.value = false;
     wifiCredentials.value = null;
     reservationTimer.value = null;
+    agreeToTerms.value = false;
     if (timerInterval.value) {
         clearInterval(timerInterval.value);
         timerInterval.value = null;
@@ -882,6 +885,15 @@ const backToDetails = () => {
     paymentStep.value = 1;
 };
 
+const backToPaymentMethod = () => {
+    paymentStep.value = 2;
+};
+
+const proceedToConfirmation = () => {
+    if (!selectedPayment.value) return;
+    paymentStep.value = 3;
+};
+
 const confirmPayment = () => {
     if (!selectedPayment.value || !selectedSpace.value) return;
 
@@ -894,7 +906,7 @@ const confirmPayment = () => {
     // For GCash/Maya, show mock payment success immediately
     if (selectedPayment.value === 'gcash' || selectedPayment.value === 'maya') {
         paymentStatus.value = { type: 'success' };
-        paymentStep.value = 3;
+        paymentStep.value = 4;
         
         // Generate WiFi credentials and start timer for immediate reservations
         const mockReservation = {
@@ -982,7 +994,7 @@ const confirmPayment = () => {
         preserveScroll: true,
         onSuccess: (page) => {
             paymentStatus.value = { type: 'hold' };
-            paymentStep.value = 3;
+            paymentStep.value = 4;
             
             // Save reservation data for offline access
             const reservation = page.props?.reservationCreated;
@@ -1004,7 +1016,7 @@ const confirmPayment = () => {
         },
         onError: (errors) => {
             paymentStatus.value = { type: 'hold' };
-            paymentStep.value = 3;
+            paymentStep.value = 4;
             if (errors.space_type_id) {
                 showToast(errors.space_type_id, 'error', 5000);
             }
@@ -1537,22 +1549,20 @@ const copyToClipboard = async (text, label = 'Text') => {
                         </section>
 
                         <!-- Offline Data View -->
-                        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10">
-                            <OfflineDataView 
-                                ref="offlineDataViewRef"
-                                :is-online="isOnline"
-                                @copy-success="(msg) => showToast(msg, 'success', 2000)"
-                                @data-cleared="() => showToast('Offline data cleared', 'success', 2000)"
-                            />
-                        </div>
+                        <OfflineDataView 
+                            ref="offlineDataViewRef"
+                            :is-online="isOnline"
+                            @copy-success="(msg) => showToast(msg, 'success', 2000)"
+                            @data-cleared="() => showToast('Offline data cleared', 'success', 2000)"
+                        />
 
                         <section id="spaces" class="space-y-6 pt-12">
-                            <div class="flex flex-wrap items-center justify-between gap-4">
-                                <div>
-                                    <h2 class="text-2xl md:text-3xl font-semibold text-[#2f4686]">Choose your space</h2>
-                                    <p class="text-sm text-slate-600">Find the perfect spot to be productive.</p>
+                                <div class="flex flex-wrap items-center justify-between gap-4">
+                                    <div>
+                                        <h2 class="text-2xl md:text-3xl font-semibold text-[#2f4686]">Choose your space</h2>
+                                        <p class="text-sm text-slate-600">Find the perfect spot to be productive.</p>
+                                    </div>
                                 </div>
-                            </div>
 
                             <!-- Booking details: Date/Time required before revealing availability -->
                             <div class="bg-white rounded-2xl shadow p-5 space-y-4">
@@ -1700,7 +1710,7 @@ const copyToClipboard = async (text, label = 'Text') => {
                 </main>
 
         <section v-if="auth.user && reservations.length > 0" id="reservations" class="py-12 bg-gradient-to-b from-white to-gray-50">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10">
                 <div class="mb-8">
                     <h2 class="text-3xl font-bold text-gray-900 mb-2">Your Reservations</h2>
                     <p class="text-gray-600">View and manage your space bookings with real-time status updates</p>
@@ -1917,7 +1927,7 @@ const copyToClipboard = async (text, label = 'Text') => {
                 <div class="flex items-center justify-between px-5 py-4 border-b">
                     <div>
                         <p class="text-xs uppercase tracking-wide text-slate-500">
-                            Step {{ paymentStep }} of 3
+                            Step {{ paymentStep }} of 4
                         </p>
                         <h3 class="text-lg font-semibold text-[#2f4686]">{{ selectedSpace?.name || 'Reservation' }}</h3>
                     </div>
@@ -2160,10 +2170,9 @@ const copyToClipboard = async (text, label = 'Text') => {
                                     type="button" 
                                     class="flex-1 inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm px-5 py-3 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors" 
                                     :disabled="!selectedPayment" 
-                                    @click="confirmPayment"
+                                    @click="proceedToConfirmation"
                                 >
-                                    <span v-if="selectedPayment === 'cash'">Reserve 1 Hour</span>
-                                    <span v-else>Complete Payment</span>
+                                    Review Booking
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                                     </svg>
@@ -2171,8 +2180,183 @@ const copyToClipboard = async (text, label = 'Text') => {
                             </div>
                         </div>
 
-                        <!-- Step 3: Confirmation -->
-                        <div v-if="paymentStep === 3" class="text-center py-10">
+                        <!-- Step 3: Review & Confirm -->
+                        <div v-if="paymentStep === 3" class="space-y-4">
+                            <div>
+                                <p class="text-sm font-semibold text-[#2f4686] mb-1">Review Your Booking</p>
+                                <p class="text-xs text-slate-500">Please verify all details before confirming your reservation.</p>
+                            </div>
+
+                            <!-- Customer Details Summary -->
+                            <div class="bg-slate-50 rounded-xl p-4 space-y-3">
+                                <div class="flex items-center justify-between pb-2 border-b border-slate-200">
+                                    <h4 class="text-sm font-bold text-[#2f4686]">Customer Information</h4>
+                                    <button 
+                                        type="button"
+                                        class="text-xs text-blue-600 hover:text-blue-800 font-semibold"
+                                        @click="paymentStep = 1"
+                                    >
+                                        Edit
+                                    </button>
+                                </div>
+                                <div class="space-y-2 text-xs">
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-600">Name:</span>
+                                        <span class="font-semibold text-slate-900">{{ customerDetails.name }}</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-600">Email:</span>
+                                        <span class="font-semibold text-slate-900">{{ customerDetails.email }}</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-600">Phone:</span>
+                                        <span class="font-semibold text-slate-900">{{ customerDetails.phone }}</span>
+                                    </div>
+                                    <div v-if="customerDetails.company_name" class="flex justify-between">
+                                        <span class="text-slate-600">Company:</span>
+                                        <span class="font-semibold text-slate-900">{{ customerDetails.company_name }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Booking Details Summary -->
+                            <div class="bg-blue-50 rounded-xl p-4 space-y-3">
+                                <div class="flex items-center justify-between pb-2 border-b border-blue-200">
+                                    <h4 class="text-sm font-bold text-[#2f4686]">Booking Details</h4>
+                                </div>
+                                <div class="space-y-2 text-xs">
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-600">Space:</span>
+                                        <span class="font-semibold text-[#2f4686]">{{ selectedSpace?.name }}</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-600">Date:</span>
+                                        <span class="font-semibold text-[#2f4686]">{{ bookingDate || 'Today' }}</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-600">Start Time:</span>
+                                        <span class="font-semibold text-[#2f4686]">{{ bookingStart || 'Immediately' }}</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-600">Duration:</span>
+                                        <span class="font-semibold text-[#2f4686]">{{ selectedPayment === 'cash' ? '1 hour (extendable onsite)' : `${bookingHours} hour(s)` }}</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-600">Pax:</span>
+                                        <span class="font-semibold text-[#2f4686]">{{ bookingPax }} person(s)</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Payment Summary -->
+                            <div class="bg-emerald-50 rounded-xl p-4 space-y-3">
+                                <div class="flex items-center justify-between pb-2 border-b border-emerald-200">
+                                    <h4 class="text-sm font-bold text-emerald-900">Payment Summary</h4>
+                                    <button 
+                                        type="button"
+                                        class="text-xs text-blue-600 hover:text-blue-800 font-semibold"
+                                        @click="paymentStep = 2"
+                                    >
+                                        Change
+                                    </button>
+                                </div>
+                                <div class="space-y-2 text-xs">
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-600">Payment Method:</span>
+                                        <span class="font-semibold text-emerald-900 capitalize">
+                                            <span v-if="selectedPayment === 'gcash'">GCash</span>
+                                            <span v-else-if="selectedPayment === 'maya'">Maya</span>
+                                            <span v-else>Cash (Onsite)</span>
+                                        </span>
+                                    </div>
+                                    <div class="h-px bg-emerald-200 my-1"></div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-600">Hourly Rate:</span>
+                                        <span class="font-semibold text-slate-900">{{ formatCurrency(estimatedPricing.hourlyRate || 0) }}</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-600">Hours:</span>
+                                        <span class="font-semibold text-slate-900">{{ selectedPayment === 'cash' ? 1 : bookingHours }}</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-slate-600">Base Cost:</span>
+                                        <span class="font-semibold text-slate-900">{{ formatCurrency(estimatedPricing.baseCost || 0) }}</span>
+                                    </div>
+                                    <div v-if="estimatedPricing.qualifies && selectedPayment !== 'cash'" class="flex justify-between text-emerald-700 font-semibold">
+                                        <span>Discount ({{ estimatedPricing.discountPercentage }}%):</span>
+                                        <span>-{{ formatCurrency(estimatedPricing.discountAmount || 0) }}</span>
+                                    </div>
+                                    <div class="h-px bg-emerald-200 my-1"></div>
+                                    <div class="flex justify-between text-base font-bold text-emerald-900">
+                                        <span>Total Amount:</span>
+                                        <span>{{ formatCurrency(estimatedPricing.finalCost || 0) }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Important Notes for Cash Payment -->
+                            <div v-if="selectedPayment === 'cash'" class="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+                                <div class="flex items-start gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    <div class="flex-1">
+                                        <h4 class="text-sm font-bold text-amber-900 mb-1">Cash Payment Notice</h4>
+                                        <ul class="space-y-1 text-xs text-amber-800">
+                                            <li>• This reservation holds your space for <strong>1 hour</strong></li>
+                                            <li>• Please proceed to the counter to pay and confirm</li>
+                                            <li>• You can extend your booking duration at the counter</li>
+                                            <li>• Reservation will be automatically cancelled if not confirmed within 1 hour</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Terms Agreement -->
+                            <div class="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                                <div class="flex items-start gap-3">
+                                    <input 
+                                        type="checkbox" 
+                                        id="terms-agreement"
+                                        class="mt-1 h-4 w-4 rounded border-slate-300 text-[#2f4686] focus:ring-[#2f4686]"
+                                        v-model="agreeToTerms"
+                                    />
+                                    <label for="terms-agreement" class="text-xs text-slate-700 cursor-pointer">
+                                        I have reviewed all the details above and agree to the 
+                                        <strong>cancellation policy</strong> and <strong>terms of service</strong>. 
+                                        I understand that my booking will be processed according to these terms.
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="flex gap-3 pt-2">
+                                <button 
+                                    type="button" 
+                                    class="flex-1 inline-flex items-center justify-center gap-2 border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-sm px-5 py-3 rounded-xl transition-colors"
+                                    @click="backToPaymentMethod"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M11 17l-5-5m0 0l5-5m-5 5h12" />
+                                    </svg>
+                                    Back
+                                </button>
+                                <button 
+                                    type="button" 
+                                    class="flex-1 inline-flex items-center justify-center gap-2 bg-[#2f4686] hover:bg-[#3956a3] text-white font-semibold text-sm px-5 py-3 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors" 
+                                    :disabled="!agreeToTerms" 
+                                    @click="confirmPayment"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span v-if="selectedPayment === 'cash'">Confirm Reservation</span>
+                                    <span v-else>Complete Payment</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Step 4: Confirmation -->
+                        <div v-if="paymentStep === 4" class="text-center py-10">
                             <div v-if="paymentStatus.type === 'success'" class="space-y-4">
                                 <div class="mx-auto h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

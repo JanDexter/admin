@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Reservation;
 use App\Models\Customer;
+use App\Models\TransactionLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -53,6 +54,20 @@ class PaymentController extends Controller
             }
             
             $reservation->update($updateData);
+
+            // Create transaction log
+            TransactionLog::create([
+                'type' => 'payment',
+                'reservation_id' => $reservation->id,
+                'customer_id' => $reservation->customer_id,
+                'processed_by' => auth()->id(),
+                'amount' => $amount,
+                'payment_method' => $validated['payment_method'],
+                'status' => $status,
+                'reference_number' => TransactionLog::generateReferenceNumber('payment'),
+                'description' => "Payment of ₱" . number_format($amount, 2) . " for reservation #{$reservation->id}",
+                'notes' => $validated['notes'] ?? null,
+            ]);
 
             // If there's a customer, update their amount_paid
             if ($reservation->customer) {
@@ -108,6 +123,20 @@ class PaymentController extends Controller
                 'notes' => $validated['notes'] 
                     ? ($reservation->notes ? $reservation->notes . "\n" . $validated['notes'] : $validated['notes'])
                     : $reservation->notes,
+            ]);
+
+            // Create transaction log
+            TransactionLog::create([
+                'type' => 'payment',
+                'reservation_id' => $reservation->id,
+                'customer_id' => $reservation->customer_id,
+                'processed_by' => auth()->id(),
+                'amount' => $amount,
+                'payment_method' => $validated['payment_method'],
+                'status' => $status,
+                'reference_number' => TransactionLog::generateReferenceNumber('payment'),
+                'description' => "Payment of ₱" . number_format($amount, 2) . " for reservation #{$reservation->id}",
+                'notes' => $validated['notes'] ?? null,
             ]);
 
             // Update customer's total amount paid

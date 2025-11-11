@@ -16,7 +16,7 @@ const form = useForm({
     phone: props.user.phone || '',
     password: '',
     password_confirmation: '',
-    role: props.user.role,
+    role: props.user.role_type,
     is_active: props.user.is_active,
 });
 

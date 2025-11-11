@@ -16,7 +16,7 @@ class CustomerViewController extends Controller
         $user = Auth::user();
         
         // If user is logged in but hasn't verified email, log them out and redirect
-        if ($user && !$user->hasVerifiedEmail() && $user->role === \App\Models\User::ROLE_CUSTOMER) {
+        if ($user && !$user->hasVerifiedEmail() && $user->isCustomer()) {
             Auth::logout();
             request()->session()->invalidate();
             request()->session()->regenerateToken();

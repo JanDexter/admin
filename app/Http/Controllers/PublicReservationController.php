@@ -16,18 +16,19 @@ use Illuminate\Validation\ValidationException;
 class PublicReservationController extends Controller
 {
     /**
-     * Allow start times that are effectively "now", with a small grace window for rounding.
+     * Auto-adjust start time if it's in the past.
+     * Returns the adjusted start time.
      */
-    protected function assertStartTimeIsNotTooFarInThePast(Carbon $startTime): void
+    protected function adjustStartTimeIfNeeded(Carbon $startTime): Carbon
     {
-        $graceWindow = Carbon::now(config('app.timezone'))
-            ->subMinutes(1);
-
-        if ($startTime->lt($graceWindow)) {
-            throw ValidationException::withMessages([
-                'start_time' => 'The start time must be a date after or equal to now.',
-            ]);
+        $now = Carbon::now(config('app.timezone'));
+        
+        // If start time is in the past, adjust it to current time
+        if ($startTime->lt($now)) {
+            return $now;
         }
+        
+        return $startTime;
     }
 
     public function checkAvailability(Request $request)
@@ -39,7 +40,9 @@ class PublicReservationController extends Controller
         ]);
 
         $startTime = Carbon::parse($validated['start_time'], config('app.timezone'));
-        $this->assertStartTimeIsNotTooFarInThePast($startTime);
+        
+        // Auto-adjust start time if it's in the past
+        $startTime = $this->adjustStartTimeIfNeeded($startTime);
         $endTime = (clone $startTime)->addHours($validated['hours']);
         $requestedPax = $validated['pax'] ?? 1;
 
@@ -93,7 +96,9 @@ class PublicReservationController extends Controller
         $startTime = isset($validated['start_time']) 
             ? Carbon::parse($validated['start_time'], config('app.timezone')) 
             : Carbon::now(config('app.timezone'));
-        $this->assertStartTimeIsNotTooFarInThePast($startTime);
+        
+        // Auto-adjust start time if it's in the past (e.g., missed payment deadline)
+        $startTime = $this->adjustStartTimeIfNeeded($startTime);
         $endTime = (clone $startTime)->addHours($hours);
 
     // Check available capacity using the same logic as the availability check endpoint

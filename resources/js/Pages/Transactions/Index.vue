@@ -4,7 +4,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 
 const props = defineProps({
-    logs: Object,
+    transactions: Object,
     filters: Object,
     summary: Object,
 });
@@ -48,7 +48,7 @@ const getTypeIcon = (type) => {
 };
 
 const applyFilter = (filter) => {
-    router.get(route('accounting.index'), {
+    router.get(route('transactions.index'), {
         filter: filter,
         type: activeType.value,
     }, {
@@ -58,7 +58,7 @@ const applyFilter = (filter) => {
 };
 
 const applyTypeFilter = (type) => {
-    router.get(route('accounting.index'), {
+    router.get(route('transactions.index'), {
         filter: activeFilter.value,
         type: type,
     }, {
@@ -72,15 +72,24 @@ const applyTypeFilter = (type) => {
     <Head title="Transactions" />
 
     <AuthenticatedLayout>
-        <template #header>
-            <div>
-                <h2 class="text-2xl font-bold leading-tight text-gray-800">Transactions</h2>
-                <p class="text-sm text-gray-600">Complete history of all financial transactions including refunds</p>
-            </div>
-        </template>
-
-        <div class="py-8">
+        <div class="py-12">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center mb-8">
+                    <div>
+                        <h2 class="font-semibold text-2xl text-gray-800 leading-tight">Transactions</h2>
+                        <p class="text-sm text-gray-600 mt-1">Complete history of all financial transactions including refunds</p>
+                    </div>
+                    <Link
+                        :href="route('transactions.export', { filter: activeFilter, type: activeType })"
+                        class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded inline-flex items-center"
+                    >
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                        </svg>
+                        Download
+                    </Link>
+                </div>
+                
                 <!-- Pending Refunds Alert -->
                 <div v-if="summary.pendingRefunds > 0" class="mb-6 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-amber-500 p-4 shadow-md">
                     <div class="flex items-center justify-between">

@@ -22,7 +22,7 @@ class EnsureAdminExists
         }
         
         // Check if any admin user exists
-        if (User::where('role', 'admin')->count() === 0) {
+        if (User::whereHas('admin')->count() === 0) {
             return redirect('/setup');
         }
         

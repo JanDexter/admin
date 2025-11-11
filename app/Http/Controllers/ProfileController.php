@@ -40,7 +40,7 @@ class ProfileController extends Controller
         $user->save();
 
         // Also update the associated Customer record if exists
-        if ($user->role === \App\Models\User::ROLE_CUSTOMER) {
+        if ($user->isCustomer()) {
             $customer = Customer::where('user_id', $user->id)->first();
             if ($customer) {
                 $customer->update([
