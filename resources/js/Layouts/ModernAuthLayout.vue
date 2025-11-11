@@ -56,8 +56,8 @@ onUnmounted(() => {
         <!-- Left Side - Slideshow -->
         <div class="hidden lg:flex lg:w-1/2 relative bg-gradient-to-br from-[#2f4686] to-[#1e2f5a] overflow-hidden">
             <!-- Logo Overlay -->
-            <div class="absolute top-8 left-8 z-20">
-                <img :src="logo" alt="CO-Z Logo" class="h-12 w-auto brightness-0 invert opacity-90" />
+            <div class="absolute top-8 left-8 z-20 bg-white rounded-lg px-4 py-2 shadow-lg">
+                <img :src="logo" alt="CO-Z Logo" class="h-10 w-auto" />
             </div>
 
             <!-- Slideshow Container -->
