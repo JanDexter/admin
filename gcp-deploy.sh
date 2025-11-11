@@ -2,6 +2,7 @@
 
 # Post-deployment script
 # This runs after the application is deployed
+# For first-time setup, use gcp-setup.sh instead
 
 echo "Running database migrations..."
 php artisan migrate --force
@@ -15,3 +16,5 @@ echo "Setting proper permissions..."
 chmod -R 775 storage bootstrap/cache
 
 echo "Deployment completed successfully!"
+echo ""
+echo "NOTE: For first-time setup, run: ./gcp-setup.sh [--with-sample-data]"
