@@ -4,6 +4,8 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { usePWA } from '@/composables/usePWA.js';
 import PaymentModal from '@/Components/PaymentModal.vue';
+import AdminReservationModal from '@/Components/AdminReservationModal.vue';
+import { UserGroupIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/vue/24/solid';
 
 const props = defineProps({
     stats: Object,
@@ -18,6 +20,8 @@ const { isOnline, isInstallable, isInstalled, installPWA } = usePWA();
 const searchQuery = ref('');
 const showPaymentModal = ref(false);
 const selectedPayment = ref(null);
+const showReservationModal = ref(false);
+const selectedReservation = ref(null);
 
 const openPaymentModal = (service) => {
     const calculatedCost = service.hourly_rate * (service.start_time ? Math.max(1, Math.ceil((Date.now() - new Date(service.start_time).getTime()) / (1000 * 60 * 60))) : 1);
@@ -39,6 +43,43 @@ const closePaymentModal = () => {
     showPaymentModal.value = false;
     selectedPayment.value = null;
 };
+
+const openReservationModal = (transaction) => {
+    if (!transaction) return;
+    selectedReservation.value = {
+        id: transaction.id,
+        status: transaction.status,
+        payment_method: transaction.payment_method || '',
+        amount_paid: transaction.amount_paid || 0,
+        amount_remaining: transaction.amount_remaining || 0,
+        total_cost: transaction.cost || transaction.total_cost || 0,
+        notes: transaction.notes || '',
+        start_time: transaction.start_time,
+        end_time: transaction.end_time,
+        hours: transaction.hours || null,
+        pax: transaction.pax || null,
+        is_open_time: transaction.is_open_time || false,
+        space_type: { name: transaction.space_type },
+        space: { name: transaction.space_name },
+        customer: {
+            name: transaction.customer_name,
+            email: transaction.customer_email || null,
+            phone: transaction.customer_phone || null,
+        },
+    };
+    showReservationModal.value = true;
+};
+
+const closeReservationModal = () => {
+    showReservationModal.value = false;
+    selectedReservation.value = null;
+};
+
+const handleReservationUpdated = () => {
+    closeReservationModal();
+    router.reload({ only: ['recentTransactions', 'activeServices'] });
+};
+
 
 const formatLocalDate = (dateString) => {
     if (!dateString) return '';
@@ -202,8 +243,9 @@ const getSlotAvailabilityColor = (spaceType) => {
         <div class="py-12">
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
                 <div class="flex justify-between items-center mb-8">
-                    <div class="flex items-center gap-4">
+                    <div>
                         <h2 class="font-semibold text-2xl text-gray-800 leading-tight">Dashboard</h2>
+                        <p class="text-sm text-gray-600 mt-1">Overview of business operations and real-time metrics</p>
                     </div>
                     <div class="flex items-center gap-4">
                         <!-- PWA Status Indicators -->
@@ -250,16 +292,14 @@ const getSlotAvailabilityColor = (spaceType) => {
                         <div class="p-6">
                             <div class="flex items-center">
                                 <div class="flex-shrink-0">
-                                    <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"/>
-                                        </svg>
+                                    <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                                        <UserGroupIcon class="w-7 h-7 text-blue-600" />
                                     </div>
                                 </div>
                                 <div class="ml-5 w-0 flex-1">
                                     <dl>
                                         <dt class="text-sm font-medium text-gray-500 truncate">Total Customers</dt>
-                                        <dd class="text-lg font-medium text-gray-900">{{ stats.total_customers }}</dd>
+                                        <dd class="text-2xl font-semibold text-gray-900">{{ stats.total_customers }}</dd>
                                     </dl>
                                 </div>
                             </div>
@@ -270,16 +310,14 @@ const getSlotAvailabilityColor = (spaceType) => {
                         <div class="p-6">
                             <div class="flex items-center">
                                 <div class="flex-shrink-0">
-                                    <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"/>
-                                        </svg>
+                                    <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                                        <CheckCircleIcon class="w-7 h-7 text-green-600" />
                                     </div>
                                 </div>
                                 <div class="ml-5 w-0 flex-1">
                                     <dl>
                                         <dt class="text-sm font-medium text-gray-500 truncate">Active Customers</dt>
-                                        <dd class="text-lg font-medium text-gray-900">{{ stats.active_customers }}</dd>
+                                        <dd class="text-2xl font-semibold text-gray-900">{{ stats.active_customers }}</dd>
                                     </dl>
                                 </div>
                             </div>
@@ -290,16 +328,14 @@ const getSlotAvailabilityColor = (spaceType) => {
                         <div class="p-6">
                             <div class="flex items-center">
                                 <div class="flex-shrink-0">
-                                    <div class="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
-                                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M10 2L3 7v11a2 2 0 002 2h4v-6h2v6h4a2 2 0 002-2V7l-7-5z"/>
-                                        </svg>
+                                    <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                                        <XCircleIcon class="w-7 h-7 text-red-600" />
                                     </div>
                                 </div>
                                 <div class="ml-5 w-0 flex-1">
                                     <dl>
                                         <dt class="text-sm font-medium text-gray-500 truncate">Inactive Customers</dt>
-                                        <dd class="text-lg font-medium text-gray-900">{{ stats.inactive_customers }}</dd>
+                                        <dd class="text-2xl font-semibold text-gray-900">{{ stats.inactive_customers }}</dd>
                                     </dl>
                                 </div>
                             </div>
@@ -308,7 +344,7 @@ const getSlotAvailabilityColor = (spaceType) => {
                 </div>
 
                 <!-- Space Slots by Type (Admin only) -->
-                <div v-if="($page.props.auth.user.role === 'admin' || $page.props.auth.can.admin_access) && spaceTypes && spaceTypes.length > 0" class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-8">
+                <div v-if="($page.props.auth.user.is_admin || $page.props.auth.can.admin_access) && spaceTypes && spaceTypes.length > 0" class="bg-white overflow-hidden shadow-sm sm:rounded-lg mb-8">
                     <div class="p-6">
                         <div class="flex justify-between items-center mb-6">
                             <h3 class="text-lg font-semibold text-gray-900">Space Slots</h3>
@@ -352,6 +388,7 @@ const getSlotAvailabilityColor = (spaceType) => {
                                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
                                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Space</th>
                                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Started</th>
+                                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rate</th>
                                             <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                         </tr>
@@ -364,6 +401,11 @@ const getSlotAvailabilityColor = (spaceType) => {
                                                 <div class="text-xs text-gray-400">{{ service.space_type }}</div>
                                             </td>
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{{ formatLocalDateTime(service.start_time) }}</td>
+                                            <td class="px-4 py-3 whitespace-nowrap">
+                                                <span :class="`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(service.status || 'active')}`">
+                                                    {{ (service.status || 'active').toUpperCase() }}
+                                                </span>
+                                            </td>
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                                 <div class="flex flex-col">
                                                     <div>
@@ -385,7 +427,7 @@ const getSlotAvailabilityColor = (spaceType) => {
                                             </td>
                                         </tr>
                                         <tr v-if="!activeServices || activeServices.length === 0">
-                                            <td colspan="5" class="px-4 py-3 text-center text-sm text-gray-500">No active services</td>
+                                            <td colspan="6" class="px-4 py-3 text-center text-sm text-gray-500">No active services</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -408,7 +450,12 @@ const getSlotAvailabilityColor = (spaceType) => {
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white divide-y divide-gray-200">
-                                        <tr v-for="transaction in recentTransactions" :key="transaction.id" class="hover:bg-gray-50">
+                                        <tr 
+                                            v-for="transaction in recentTransactions" 
+                                            :key="transaction.id" 
+                                            @click="openReservationModal(transaction)"
+                                            class="hover:bg-gray-50 cursor-pointer"
+                                        >
                                             <td class="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{{ transaction.customer_name }}</td>
                                             <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                                                 <div>{{ transaction.space_name }}</div>
@@ -597,6 +644,14 @@ const getSlotAvailabilityColor = (spaceType) => {
             :reservation="selectedPayment"
             @close="closePaymentModal"
             @paid="router.reload({ only: ['activeServices', 'recentTransactions'] })"
+        />
+        
+        <!-- Admin Reservation Modal -->
+        <AdminReservationModal
+            :show="showReservationModal"
+            :reservation="selectedReservation"
+            @close="closeReservationModal"
+            @updated="handleReservationUpdated"
         />
     </AuthenticatedLayout>
 </template>

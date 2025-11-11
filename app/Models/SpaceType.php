@@ -14,6 +14,7 @@ class SpaceType extends Model
         'name',
         'default_price',
         'hourly_rate',
+        'pricing_type',
         'default_discount_hours',
         'default_discount_percentage',
         'total_slots',
@@ -58,11 +59,11 @@ class SpaceType extends Model
     public static function getDefaultSpaceTypes()
     {
         return [
-            ['name' => 'PRIVATE SPACE', 'total_slots' => 8, 'default_price' => 50.00, 'hourly_rate' => 50.00, 'default_discount_hours' => 4, 'default_discount_percentage' => 10.00],
-            ['name' => 'DRAFTING TABLE', 'total_slots' => 3, 'default_price' => 50.00, 'hourly_rate' => 50.00, 'default_discount_hours' => 6, 'default_discount_percentage' => 15.00],
-            ['name' => 'CONFERENCE ROOM', 'total_slots' => 1, 'default_price' => 350.00, 'hourly_rate' => 350.00, 'default_discount_hours' => 3, 'default_discount_percentage' => 20.00],
-            ['name' => 'SHARED SPACE', 'total_slots' => 34, 'default_price' => 40.00, 'hourly_rate' => 40.00, 'default_discount_hours' => 8, 'default_discount_percentage' => 12.00],
-            ['name' => 'EXCLUSIVE SPACE', 'total_slots' => 6, 'default_price' => 60.00, 'hourly_rate' => 60.00, 'default_discount_hours' => 5, 'default_discount_percentage' => 18.00],
+            ['name' => 'PRIVATE SPACE', 'total_slots' => 8, 'default_price' => 50.00, 'hourly_rate' => 50.00, 'pricing_type' => 'per_person', 'default_discount_hours' => 4, 'default_discount_percentage' => 10.00],
+            ['name' => 'DRAFTING TABLE', 'total_slots' => 3, 'default_price' => 50.00, 'hourly_rate' => 50.00, 'pricing_type' => 'per_person', 'default_discount_hours' => 6, 'default_discount_percentage' => 15.00],
+            ['name' => 'CONFERENCE ROOM', 'total_slots' => 1, 'default_price' => 350.00, 'hourly_rate' => 350.00, 'pricing_type' => 'per_reservation', 'default_discount_hours' => 3, 'default_discount_percentage' => 20.00],
+            ['name' => 'SHARED SPACE', 'total_slots' => 34, 'default_price' => 40.00, 'hourly_rate' => 40.00, 'pricing_type' => 'per_person', 'default_discount_hours' => 8, 'default_discount_percentage' => 12.00],
+            ['name' => 'EXCLUSIVE SPACE', 'total_slots' => 6, 'default_price' => 60.00, 'hourly_rate' => 60.00, 'pricing_type' => 'per_person', 'default_discount_hours' => 5, 'default_discount_percentage' => 18.00],
         ];
     }
 

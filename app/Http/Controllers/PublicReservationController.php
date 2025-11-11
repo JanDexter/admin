@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Models\Reservation;
 use App\Models\SpaceType;
+use App\Models\Refund;
+use App\Models\TransactionLog;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -14,18 +16,19 @@ use Illuminate\Validation\ValidationException;
 class PublicReservationController extends Controller
 {
     /**
-     * Allow start times that are effectively "now", with a small grace window for rounding.
+     * Auto-adjust start time if it's in the past.
+     * Returns the adjusted start time.
      */
-    protected function assertStartTimeIsNotTooFarInThePast(Carbon $startTime): void
+    protected function adjustStartTimeIfNeeded(Carbon $startTime): Carbon
     {
-        $graceWindow = Carbon::now(config('app.timezone'))
-            ->subMinutes(1);
-
-        if ($startTime->lt($graceWindow)) {
-            throw ValidationException::withMessages([
-                'start_time' => 'The start time must be a date after or equal to now.',
-            ]);
+        $now = Carbon::now(config('app.timezone'));
+        
+        // If start time is in the past, adjust it to current time
+        if ($startTime->lt($now)) {
+            return $now;
         }
+        
+        return $startTime;
     }
 
     public function checkAvailability(Request $request)
@@ -37,7 +40,9 @@ class PublicReservationController extends Controller
         ]);
 
         $startTime = Carbon::parse($validated['start_time'], config('app.timezone'));
-        $this->assertStartTimeIsNotTooFarInThePast($startTime);
+        
+        // Auto-adjust start time if it's in the past
+        $startTime = $this->adjustStartTimeIfNeeded($startTime);
         $endTime = (clone $startTime)->addHours($validated['hours']);
         $requestedPax = $validated['pax'] ?? 1;
 
@@ -91,7 +96,9 @@ class PublicReservationController extends Controller
         $startTime = isset($validated['start_time']) 
             ? Carbon::parse($validated['start_time'], config('app.timezone')) 
             : Carbon::now(config('app.timezone'));
-        $this->assertStartTimeIsNotTooFarInThePast($startTime);
+        
+        // Auto-adjust start time if it's in the past (e.g., missed payment deadline)
+        $startTime = $this->adjustStartTimeIfNeeded($startTime);
         $endTime = (clone $startTime)->addHours($hours);
 
     // Check available capacity using the same logic as the availability check endpoint
@@ -121,42 +128,58 @@ class PublicReservationController extends Controller
             $baseCost -= ($baseCost * ($appliedDiscountPercentage / 100));
         }
 
-    $reservation = DB::transaction(function () use ($validated, $spaceType, $hours, $pax, $appliedHourlyRate, $appliedDiscountHours, $appliedDiscountPercentage, $isDiscounted, $baseCost, $startTime, $endTime) {
-            // Find or create the customer
-            $customer = Customer::firstOrCreate(
-                ['email' => $validated['customer_email']],
-                [
-                    'name' => $validated['customer_name'],
-                    'phone' => $validated['customer_phone'],
-                    'company_name' => $validated['customer_company_name'] ?? null,
-                    'contact_person' => $validated['customer_name'],
-                    'space_type_id' => $spaceType->id,
-                    'user_id' => Auth::id(), // Link to user if logged in
-                ]
-            );
+        // Find or create customer first to validate cash bookings
+        $customer = Customer::firstOrCreate(
+            ['email' => $validated['customer_email']],
+            [
+                'name' => $validated['customer_name'],
+                'phone' => $validated['customer_phone'],
+                'company_name' => $validated['customer_company_name'] ?? null,
+                'contact_person' => $validated['customer_name'],
+                'space_type_id' => $spaceType->id,
+                'user_id' => Auth::id(),
+            ]
+        );
 
-            // If the customer already existed, update their contact info when new details are provided
-            if (!$customer->wasRecentlyCreated) {
-                $customer->fill([
-                    'name' => $validated['customer_name'],
-                    'phone' => $validated['customer_phone'],
-                    'space_type_id' => $spaceType->id,
-                ]);
+        // If the customer already existed, update their contact info
+        if (!$customer->wasRecentlyCreated) {
+            $customer->fill([
+                'name' => $validated['customer_name'],
+                'phone' => $validated['customer_phone'],
+                'space_type_id' => $spaceType->id,
+            ]);
 
-                if (!empty($validated['customer_company_name'])) {
-                    $customer->company_name = $validated['customer_company_name'];
-                }
-
-                if (empty($customer->contact_person)) {
-                    $customer->contact_person = $validated['customer_name'];
-                }
-
-                if (Auth::id() && !$customer->user_id) {
-                    $customer->user_id = Auth::id();
-                }
-
-                $customer->save();
+            if (!empty($validated['customer_company_name'])) {
+                $customer->company_name = $validated['customer_company_name'];
             }
+            $customer->save();
+        }
+
+        // VALIDATION: Check if customer can make cash booking
+        if ($validated['payment_method'] === 'cash') {
+            $validation = $customer->validateCashBooking();
+            
+            if (!$validation['valid']) {
+                return redirect()
+                    ->back()
+                    ->withErrors([
+                        'payment_method' => $validation['message'],
+                    ])
+                    ->withInput();
+            }
+        }
+
+    $reservation = DB::transaction(function () use ($validated, $spaceType, $hours, $pax, $appliedHourlyRate, $appliedDiscountHours, $appliedDiscountPercentage, $isDiscounted, $baseCost, $startTime, $endTime, $customer) {
+            // Update additional customer info if needed
+            if (empty($customer->contact_person)) {
+                $customer->contact_person = $validated['customer_name'];
+            }
+
+            if (Auth::id() && !$customer->user_id) {
+                $customer->user_id = Auth::id();
+            }
+
+            $customer->save();
 
             // Auto-assign to an available physical space without time conflicts
             $assignedSpace = \App\Models\Space::where('space_type_id', $spaceType->id)
@@ -303,20 +326,77 @@ class PublicReservationController extends Controller
         }
 
         // Only allow canceling pending, on_hold, or confirmed reservations
-        if (!in_array($reservation->status, ['pending', 'on_hold', 'confirmed', 'paid'])) {
+        if (!in_array($reservation->status, ['pending', 'on_hold', 'confirmed', 'paid', 'active'])) {
             return redirect()
                 ->back()
-                ->with('error', 'Only pending, on-hold, or active reservations can be cancelled.');
+                ->with('error', 'Only pending, on-hold, confirmed, paid, or active reservations can be cancelled.');
         }
 
-        DB::transaction(function () use ($reservation) {
+        // Calculate refund if there was payment
+        $refundInfo = Refund::calculateRefund($reservation);
+        $refundAmount = $refundInfo['refund_amount'];
+        $cancellationFee = $refundInfo['cancellation_fee'];
+
+        DB::transaction(function () use ($reservation, $refundAmount, $cancellationFee, $refundInfo) {
+            // Update reservation status
             $reservation->status = 'cancelled';
             $reservation->save();
+
+            // Log the cancellation
+            TransactionLog::logCancellation(
+                $reservation,
+                null, // Customer-initiated, no admin processor
+                "Cancelled {$refundInfo['hours_until_start']} hours before start. Policy: {$refundInfo['percentage']}% refund"
+            );
+
+            // Create refund record if payment was made
+            if ($reservation->amount_paid > 0) {
+                $refund = Refund::create([
+                    'reservation_id' => $reservation->id,
+                    'customer_id' => $reservation->customer_id,
+                    'refund_amount' => $refundAmount,
+                    'original_amount_paid' => $reservation->amount_paid,
+                    'cancellation_fee' => $cancellationFee,
+                    'refund_method' => $reservation->payment_method,
+                    'status' => $refundAmount > 0 ? 'pending' : 'completed', // All refunds are pending, awaiting admin approval
+                    'reason' => 'Customer cancelled reservation',
+                    'reference_number' => Refund::generateReferenceNumber(),
+                    'notes' => sprintf(
+                        'Cancelled %.1f hours before start time. Refund: %d%%',
+                        $refundInfo['hours_until_start'],
+                        $refundInfo['percentage']
+                    ),
+                ]);
+
+                // Log the refund request (not yet processed)
+                if ($refundAmount > 0) {
+                    TransactionLog::logRefund(
+                        $reservation,
+                        $refundAmount,
+                        null, // Customer-initiated
+                        "Refund request pending admin approval | Refund amount: ₱" . number_format($refundAmount, 2) . " | Cancellation fee: ₱" . number_format($cancellationFee, 2)
+                    );
+                }
+            }
         });
+
+        // Build success message
+        $message = 'Reservation cancelled successfully.';
+        if ($reservation->amount_paid > 0) {
+            if ($refundAmount > 0) {
+                $message .= sprintf(
+                    ' Your refund request of ₱%s has been submitted and is pending admin approval (Cancellation fee: ₱%s). You will be notified once processed.',
+                    number_format($refundAmount, 2),
+                    number_format($cancellationFee, 2)
+                );
+            } else {
+                $message .= ' No refund available as the reservation has already started or cancellation was too late.';
+            }
+        }
 
         return redirect()
             ->back()
-            ->with('success', 'Reservation cancelled successfully.');
+            ->with('success', $message);
     }
 }
 

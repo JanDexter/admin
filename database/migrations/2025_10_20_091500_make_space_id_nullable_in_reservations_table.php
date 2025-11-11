@@ -6,8 +6,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
-{
-    public function up(): void
+{    public function up(): void
     {
         if (!Schema::hasTable('reservations')) {
             return;
@@ -18,15 +17,16 @@ return new class extends Migration
                 $table->dropForeign(['space_id']);
             });
 
-            DB::statement('ALTER TABLE reservations MODIFY space_id BIGINT UNSIGNED NULL');
+            // SQLite-compatible approach
+            Schema::table('reservations', function (Blueprint $table) {
+                $table->unsignedBigInteger('space_id')->nullable()->change();
+            });
 
             Schema::table('reservations', function (Blueprint $table) {
                 $table->foreign('space_id')->references('id')->on('spaces')->nullOnDelete();
             });
         }
-    }
-
-    public function down(): void
+    }    public function down(): void
     {
         if (!Schema::hasTable('reservations')) {
             return;
@@ -37,7 +37,10 @@ return new class extends Migration
                 $table->dropForeign(['space_id']);
             });
 
-            DB::statement('ALTER TABLE reservations MODIFY space_id BIGINT UNSIGNED NOT NULL');
+            // SQLite-compatible approach
+            Schema::table('reservations', function (Blueprint $table) {
+                $table->unsignedBigInteger('space_id')->nullable(false)->change();
+            });
 
             Schema::table('reservations', function (Blueprint $table) {
                 $table->foreign('space_id')->references('id')->on('spaces')->cascadeOnDelete();

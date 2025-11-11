@@ -8,8 +8,7 @@ const RESERVATION_KEY = `${STORAGE_PREFIX}reservation_data`;
 const WIFI_KEY = `${STORAGE_PREFIX}wifi_credentials`;
 const TIMER_KEY = `${STORAGE_PREFIX}timer_state`;
 
-export const offlineStorage = {
-    /**
+export const offlineStorage = {    /**
      * Save reservation data for offline access
      */
     saveReservation(reservation) {
@@ -18,12 +17,21 @@ export const offlineStorage = {
             
             const data = {
                 id: reservation.id,
-                space_name: reservation.space_name,
+                space_name: reservation.space_name || reservation.space_type?.name,
+                space_type_id: reservation.space_type_id,
                 start_time: reservation.start_time,
                 end_time: reservation.end_time,
                 status: reservation.status,
                 total_price: reservation.total_price,
                 payment_method: reservation.payment_method,
+                hours: reservation.hours,
+                pax: reservation.pax,
+                customer_name: reservation.customer_name,
+                customer_email: reservation.customer_email,
+                customer_phone: reservation.customer_phone,
+                customer_company_name: reservation.customer_company_name,
+                created_at: reservation.created_at,
+                updated_at: reservation.updated_at,
                 saved_at: new Date().toISOString(),
                 expires_at: reservation.end_time,
             };

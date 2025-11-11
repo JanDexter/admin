@@ -41,7 +41,7 @@ class SpaceTypeSeeder extends Seeder
         return match($name) {
             'PRIVATE SPACE' => 'Individual private workspace with desk and chair',
             'DRAFTING TABLE' => 'Large table suitable for architectural or design work',
-            'CONFERENCE ROOM' => 'Meeting room for team discussions and presentations',
+            'CONFERENCE ROOM' => 'Meeting room for team discussions and presentations. Recommended for around 10 people.',
             'SHARED SPACE' => 'Open workspace area for collaborative work',
             'EXCLUSIVE SPACE' => 'Premium workspace with additional amenities',
             default => 'Workspace area'

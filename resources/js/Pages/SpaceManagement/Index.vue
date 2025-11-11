@@ -33,8 +33,8 @@ const selectedPaymentSpace = ref(null);
 const isOpenTimeMode = ref(false); // Track if we're starting an open time session
 // Pricing modal state
 const showPricingModalId = ref(null); // spaceTypeId or null
-const pricingForm = ref({ hourly_rate: '', default_discount_hours: '', default_discount_percentage: '' });
-const pricingErrors = ref({ hourly_rate: '', default_discount_hours: '', default_discount_percentage: '' });
+const pricingForm = ref({ hourly_rate: '', pricing_type: 'per_person', default_discount_hours: '', default_discount_percentage: '' });
+const pricingErrors = ref({ hourly_rate: '', pricing_type: '', default_discount_hours: '', default_discount_percentage: '' });
 
 // Details modal state (name, description, photo)
 const showDetailsModalId = ref(null); // spaceTypeId or null
@@ -799,10 +799,11 @@ const openPricingModal = (spaceType) => {
     showPricingModalId.value = spaceType.id;
     pricingForm.value = {
         hourly_rate: spaceType.hourly_rate ?? spaceType.default_price ?? '',
+        pricing_type: spaceType.pricing_type ?? 'per_person',
         default_discount_hours: spaceType.default_discount_hours ?? '',
         default_discount_percentage: spaceType.default_discount_percentage ?? '',
     };
-    pricingErrors.value = { hourly_rate: '', default_discount_hours: '', default_discount_percentage: '' };
+    pricingErrors.value = { hourly_rate: '', pricing_type: '', default_discount_hours: '', default_discount_percentage: '' };
 };
 
 const closePricingModal = () => {
@@ -810,7 +811,7 @@ const closePricingModal = () => {
 };
 
 const validatePricing = () => {
-    pricingErrors.value = { hourly_rate: '', default_discount_hours: '', default_discount_percentage: '' };
+    pricingErrors.value = { hourly_rate: '', pricing_type: '', default_discount_hours: '', default_discount_percentage: '' };
     const v = pricingForm.value || {};
     let ok = true;
     const rate = v.hourly_rate;
@@ -855,6 +856,7 @@ const savePricingModal = () => {
     updatingPricing.value = id;
     const payload = {
         hourly_rate: Number(val.hourly_rate),
+        pricing_type: val.pricing_type || 'per_person',
         default_discount_hours: val.default_discount_hours === '' ? null : Number(val.default_discount_hours),
         default_discount_percentage: val.default_discount_percentage === '' ? null : Number(val.default_discount_percentage),
     };
@@ -863,6 +865,7 @@ const savePricingModal = () => {
         onError: (errors) => {
             // Map server-side validation errors (422) to inline errors
             pricingErrors.value.hourly_rate = errors?.hourly_rate ?? pricingErrors.value.hourly_rate;
+            pricingErrors.value.pricing_type = errors?.pricing_type ?? pricingErrors.value.pricing_type;
             pricingErrors.value.default_discount_hours = errors?.default_discount_hours ?? pricingErrors.value.default_discount_hours;
             pricingErrors.value.default_discount_percentage = errors?.default_discount_percentage ?? pricingErrors.value.default_discount_percentage;
             showToast('Failed to save pricing. Please check the form and try again.', 'error');
@@ -1087,6 +1090,7 @@ const createTypeForm = useForm({
     name: '',
     description: '',
     hourly_rate: '',
+    pricing_type: 'per_person',
     default_discount_hours: '',
     default_discount_percentage: '',
     initial_slots: 1,
@@ -1097,6 +1101,7 @@ const submitCreateType = () => {
         onSuccess: () => {
             createTypeForm.reset();
             createTypeForm.initial_slots = 1;
+            createTypeForm.pricing_type = 'per_person';
             showCreateType.value = false;
         }
     });
@@ -1183,8 +1188,9 @@ const findSpaceById = (spaceId) => {
             <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
                 <!-- Header matching Dashboard style -->
                 <div class="flex justify-between items-center mb-8">
-                    <div class="flex items-center gap-4">
+                    <div>
                         <h2 class="font-semibold text-2xl text-gray-800 leading-tight">Space Management</h2>
+                        <p class="text-sm text-gray-600 mt-1">Configure spaces, types, and pricing structures</p>
                     </div>
                     <div class="flex items-center gap-4">
                         <Link
@@ -1217,6 +1223,13 @@ const findSpaceById = (spaceId) => {
                                 <div class="md:col-span-1">
                                     <label class="block text-xs font-medium text-gray-700">Rate (₱/h)</label>
                                     <input v-model.number="createTypeForm.hourly_rate" type="number" min="0" step="0.01" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm" />
+                                </div>
+                                <div class="md:col-span-1">
+                                    <label class="block text-xs font-medium text-gray-700">Pricing Type</label>
+                                    <select v-model="createTypeForm.pricing_type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                        <option value="per_person">Per Person</option>
+                                        <option value="per_reservation">Per Reservation</option>
+                                    </select>
                                 </div>
                                 <div>
                                     <label class="block text-xs font-medium text-gray-700">Disc. After (h)</label>
@@ -1735,6 +1748,19 @@ const findSpaceById = (spaceId) => {
                                                     :class="pricingErrors.hourly_rate ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'"
                                                 />
                                                 <p v-if="pricingErrors.hourly_rate" class="mt-1 text-xxs text-red-600">{{ pricingErrors.hourly_rate }}</p>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-gray-700">Pricing Type</label>
+                                                <select 
+                                                    v-model="pricingForm.pricing_type" 
+                                                    class="mt-1 block w-full rounded-md shadow-sm text-sm border border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                                >
+                                                    <option value="per_person">Per Person per Hour</option>
+                                                    <option value="per_reservation">Per Reservation per Hour</option>
+                                                </select>
+                                                <p class="mt-1 text-xxs text-gray-500">
+                                                    {{ pricingForm.pricing_type === 'per_person' ? 'Price multiplies by number of people' : 'Flat rate regardless of number of people' }}
+                                                </p>
                                             </div>
                                             <div class="grid grid-cols-2 gap-3">
                                                 <div>

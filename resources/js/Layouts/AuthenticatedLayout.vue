@@ -34,14 +34,14 @@ const showingNavigationDropdown = ref(false);
                                     User Management
                                 </NavLink>
                                 <NavLink 
-                                    v-if="$page.props.auth.user.role === 'admin' || $page.props.auth.can.admin_access"
+                                    v-if="$page.props.auth.user.is_admin || $page.props.auth.can.admin_access"
                                     :href="route('space-management.index')" 
                                     :active="route().current('space-management.*')"
                                 >
                                     Space Management
                                 </NavLink>
-                                <NavLink :href="route('accounting.index')" :active="route().current('accounting.index')">
-                                    Accounting
+                                <NavLink :href="route('transactions.index')" :active="route().current('transactions.index')">
+                                    Transactions
                                 </NavLink>
                                 <NavLink :href="route('calendar')" :active="route().current('calendar')">
                                     Calendar
@@ -157,7 +157,7 @@ const showingNavigationDropdown = ref(false);
                         
                         <!-- User Management (Admin only) -->
                         <ResponsiveNavLink
-                            v-if="$page.props.auth.user.role === 'admin'"
+                            v-if="$page.props.auth.user.is_admin"
                             :href="route('user-management.index')"
                             :active="route().current('user-management.*')"
                         >
@@ -166,22 +166,20 @@ const showingNavigationDropdown = ref(false);
                         
                         <!-- Space Management (Admin only) -->
                         <ResponsiveNavLink
-                            v-if="$page.props.auth.user.role === 'admin' || $page.props.auth.can.admin_access"
+                            v-if="$page.props.auth.user.is_admin || $page.props.auth.can.admin_access"
                             :href="route('space-management.index')"
                             :active="route().current('space-management.*')"
                         >
                             Space Management
                         </ResponsiveNavLink>
-                        <ResponsiveNavLink :href="route('accounting.index')" :active="route().current('accounting.index')">
-                            Accounting
+                        <ResponsiveNavLink :href="route('transactions.index')" :active="route().current('transactions.index')">
+                            Transactions
                         </ResponsiveNavLink>
                         <ResponsiveNavLink :href="route('calendar')" :active="route().current('calendar')">
                             Calendar
                         </ResponsiveNavLink>
                         <!-- Task Tracker link removed -->
-                    </div>
-
-                    <!-- Responsive Settings Options -->
+                    </div>                    <!-- Responsive Settings Options -->
                     <div
                         class="border-t border-gray-200 pb-1 pt-4"
                     >

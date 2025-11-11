@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Reservation;
 use App\Models\SpaceType;
+use App\Models\TransactionLog;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -13,6 +14,15 @@ class CustomerViewController extends Controller
     public function __invoke()
     {
         $user = Auth::user();
+        
+        // If user is logged in but hasn't verified email, log them out and redirect
+        if ($user && !$user->hasVerifiedEmail() && $user->isCustomer()) {
+            Auth::logout();
+            request()->session()->invalidate();
+            request()->session()->regenerateToken();
+            return redirect()->route('login')->with('status', 'Please verify your email address to continue.');
+        }
+        
         $reservations = [];
 
         if ($user) {
@@ -78,6 +88,7 @@ class CustomerViewController extends Controller
         'photo_path',
                 'default_price',
                 'hourly_rate',
+                'pricing_type',
                 'default_discount_hours',
                 'default_discount_percentage',
                 'available_slots',
@@ -95,6 +106,7 @@ class CustomerViewController extends Controller
                     'description' => $type->description,
                     'photo_url' => $type->photo_path ? asset('storage/' . $type->photo_path) . '?v=' . urlencode(optional($type->updated_at)->timestamp ?? time()) : null,
                     'price_per_hour' => $price,
+                    'pricing_type' => $type->pricing_type ?? 'per_person',
                     'discount_hours' => $type->default_discount_hours,
                     'discount_percentage' => $type->default_discount_percentage,
                     'available_slots' => $type->available_slots,
@@ -110,4 +122,53 @@ class CustomerViewController extends Controller
             'reservations' => $reservations,
         ]);
     }
+
+    public function transactions()
+    {
+        $user = Auth::user();
+
+        if (!$user) {
+            return response()->json(['transactions' => []]);
+        }
+
+        // Get customer ID if exists
+        $customerId = $user->relationLoaded('customer') 
+            ? optional($user->customer)->id 
+            : optional($user->customer()->first())->id;
+
+        // Fetch transaction logs for this customer
+        $transactions = TransactionLog::with(['reservation.spaceType', 'processedBy'])
+            ->when($customerId, function ($query) use ($customerId) {
+                $query->where('customer_id', $customerId);
+            })
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(function ($log) {
+                return [
+                    'id' => $log->id,
+                    'type' => $log->type,
+                    'amount' => $log->amount,
+                    'payment_method' => $log->payment_method,
+                    'status' => $log->status,
+                    'reference_number' => $log->reference_number,
+                    'description' => $log->description,
+                    'notes' => $log->notes,
+                    'created_at' => $log->created_at,
+                    'reservation' => $log->reservation ? [
+                        'id' => $log->reservation->id,
+                        'start_time' => $log->reservation->start_time,
+                        'end_time' => $log->reservation->end_time,
+                        'space_type' => $log->reservation->spaceType ? [
+                            'name' => $log->reservation->spaceType->name,
+                        ] : null,
+                    ] : null,
+                    'processed_by' => $log->processedBy ? [
+                        'name' => $log->processedBy->name,
+                    ] : null,
+                ];
+            });
+
+        return response()->json(['transactions' => $transactions]);
+    }
 }
+

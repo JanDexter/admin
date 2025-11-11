@@ -144,16 +144,14 @@ ls -la public/build
 ### 8. Deploy to App Engine
 
 ```bash
-# Make build script executable
-chmod +x gcp-build.sh gcp-deploy.sh
+# Make build scripts executable
+chmod +x gcp-build.sh gcp-deploy.sh gcp-setup.sh
 
 # Deploy to App Engine
 gcloud app deploy app.yaml --quiet
 
-# Run migrations after first deployment
-gcloud app deploy dispatch.yaml
-gcloud sql connect admin-db --user=admin-user
-# Then run: php artisan migrate --force
+# After first deployment, run setup script
+# See "Post-Deployment Setup" section below
 ```
 
 ## Alternative: Deploy to Cloud Run (Recommended for better scaling)
@@ -181,7 +179,80 @@ gcloud run deploy admin-app \
   --memory 512Mi
 ```
 
-## Post-Deployment Steps
+## Post-Deployment Setup
+
+### First-Time Setup (After Initial Deployment)
+
+After deploying for the first time, you need to set up the database and seed initial data.
+
+#### Option 1: Automated Setup with Script (Recommended)
+
+```bash
+# SSH into your App Engine instance
+gcloud app instances list  # Get INSTANCE_ID and VERSION
+gcloud app instances ssh [INSTANCE_ID] --service=default --version=[VERSION]
+
+# Navigate to app directory
+cd /workspace
+
+# Run setup script (production - admin user + spaces only)
+./gcp-setup.sh
+
+# OR run with sample data (for testing/demo environments)
+./gcp-setup.sh --with-sample-data
+```
+
+The `gcp-setup.sh` script will:
+1. Run all database migrations
+2. Seed admin user (from `AdminSeeder`)
+3. Seed initial spaces structure (from `SpaceSeeder`)
+4. Optionally seed sample data if `--with-sample-data` flag is used:
+   - 8 sample customers (4 individual, 4 company)
+   - 16 sample reservations with various statuses
+   - Transaction logs for all payments/refunds/cancellations
+5. Cache all configuration
+6. Set proper file permissions
+
+#### Option 2: Manual Setup Commands
+
+If you prefer to run commands individually:
+
+```bash
+# SSH into App Engine instance
+gcloud app instances ssh [INSTANCE_ID] --service=default --version=[VERSION]
+
+# Navigate to app directory
+cd /workspace
+
+# 1. Run migrations
+php artisan migrate --force
+
+# 2. Seed initial data (admin + spaces)
+php artisan db:seed --force
+
+# 3. (Optional) Seed sample data for testing
+php artisan db:seed --class=SampleDataSeeder --force
+
+# 4. Cache configuration
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+
+# 5. Set permissions
+chmod -R 775 storage bootstrap/cache
+
+# 6. Create storage link
+php artisan storage:link
+```
+
+### Regular Deployments (After Initial Setup)
+
+For subsequent deployments, the `gcp-deploy.sh` script automatically runs during deployment and handles:
+- Running new migrations
+- Clearing and caching configuration
+- Setting permissions
+
+**Note:** Regular deployments do NOT re-seed data to preserve your production data.
 
 ### 1. Run Database Migrations
 

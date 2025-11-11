@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Reservation;
+use App\Models\Refund;
+use App\Models\TransactionLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class AdminReservationController extends Controller
 {
@@ -126,6 +129,41 @@ class AdminReservationController extends Controller
 
             if (array_key_exists('amount_paid', $validated)) {
                 $reservation->amount_paid = $newAmount;
+                
+                // Create transaction log if payment amount changed
+                if ($newAmount != $originalAmount) {
+                    $paymentDiff = $newAmount - $originalAmount;
+                    
+                    if ($paymentDiff > 0) {
+                        // Payment added
+                        TransactionLog::create([
+                            'type' => 'payment',
+                            'reservation_id' => $reservation->id,
+                            'customer_id' => $reservation->customer_id,
+                            'processed_by' => auth()->id(),
+                            'amount' => $paymentDiff,
+                            'payment_method' => $validated['payment_method'] ?? $reservation->payment_method ?? 'cash',
+                            'status' => $validated['status'] ?? $reservation->status,
+                            'reference_number' => TransactionLog::generateReferenceNumber('payment'),
+                            'description' => "Payment adjustment: ₱" . number_format($paymentDiff, 2) . " added for reservation #{$reservation->id}",
+                            'notes' => $validated['notes'] ?? null,
+                        ]);
+                    } elseif ($paymentDiff < 0) {
+                        // Payment reduced (refund)
+                        TransactionLog::create([
+                            'type' => 'refund',
+                            'reservation_id' => $reservation->id,
+                            'customer_id' => $reservation->customer_id,
+                            'processed_by' => auth()->id(),
+                            'amount' => $paymentDiff, // Negative amount
+                            'payment_method' => $validated['payment_method'] ?? $reservation->payment_method ?? 'cash',
+                            'status' => 'approved',
+                            'reference_number' => TransactionLog::generateReferenceNumber('refund'),
+                            'description' => "Payment adjustment: ₱" . number_format(abs($paymentDiff), 2) . " refunded for reservation #{$reservation->id}",
+                            'notes' => $validated['notes'] ?? null,
+                        ]);
+                    }
+                }
             }
 
             $reservation->save();
@@ -150,5 +188,93 @@ class AdminReservationController extends Controller
         });
 
         return back()->with('success', 'Reservation closed successfully.');
+    }
+
+    public function cancel(Request $request, Reservation $reservation)
+    {
+        // Only allow canceling non-completed/non-cancelled reservations
+        if (in_array($reservation->status, ['completed', 'cancelled'])) {
+            return redirect()
+                ->back()
+                ->with('error', 'This reservation has already been ' . $reservation->status . '.');
+        }
+
+        $validated = $request->validate([
+            'reason' => 'nullable|string|max:1000',
+        ]);
+
+        // Calculate refund if there was payment
+        $refundInfo = Refund::calculateRefund($reservation);
+        $refundAmount = $refundInfo['refund_amount'];
+        $cancellationFee = $refundInfo['cancellation_fee'];
+
+        DB::transaction(function () use ($reservation, $refundAmount, $cancellationFee, $refundInfo, $validated) {
+            // Update reservation status
+            $reservation->status = 'cancelled';
+            $reservation->save();
+
+            $adminNotes = sprintf(
+                'Admin cancelled %s hours before start. Policy: %s%% refund. Reason: %s',
+                number_format($refundInfo['hours_until_start'], 1),
+                $refundInfo['percentage'],
+                $validated['reason'] ?? 'No reason provided'
+            );
+
+            // Log the cancellation
+            TransactionLog::logCancellation(
+                $reservation,
+                Auth::id(),
+                $adminNotes
+            );
+
+            // Create refund record if payment was made
+            if ($reservation->amount_paid > 0) {
+                $refund = Refund::create([
+                    'reservation_id' => $reservation->id,
+                    'customer_id' => $reservation->customer_id,
+                    'processed_by' => Auth::id(),
+                    'refund_amount' => $refundAmount,
+                    'original_amount_paid' => $reservation->amount_paid,
+                    'cancellation_fee' => $cancellationFee,
+                    'refund_method' => $reservation->payment_method,
+                    'status' => $refundAmount > 0 ? 'pending' : 'completed', // Admin cancellations also require approval
+                    'reason' => $validated['reason'] ?? 'Admin cancelled reservation',
+                    'reference_number' => Refund::generateReferenceNumber(),
+                    'notes' => sprintf(
+                        'Admin cancelled %.1f hours before start time. Refund: %d%%',
+                        $refundInfo['hours_until_start'],
+                        $refundInfo['percentage']
+                    ),
+                ]);
+
+                // Log the refund request (pending approval)
+                if ($refundAmount > 0) {
+                    TransactionLog::logRefund(
+                        $reservation,
+                        $refundAmount,
+                        Auth::id(),
+                        "Admin cancellation - Refund request pending approval | Amount: ₱" . number_format($refundAmount, 2) . " | Fee: ₱" . number_format($cancellationFee, 2)
+                    );
+                }
+            }
+        });
+
+        // Build success message
+        $message = 'Reservation cancelled successfully.';
+        if ($reservation->amount_paid > 0) {
+            if ($refundAmount > 0) {
+                $message .= sprintf(
+                    ' A refund of ₱%s will be processed (Cancellation fee: ₱%s).',
+                    number_format($refundAmount, 2),
+                    number_format($cancellationFee, 2)
+                );
+            } else {
+                $message .= ' No refund issued as cancellation was after start time or policy applies 0% refund.';
+            }
+        }
+
+        return redirect()
+            ->back()
+            ->with('success', $message);
     }
 }

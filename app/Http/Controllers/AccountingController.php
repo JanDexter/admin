@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Reservation;
+use App\Models\TransactionLog;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -13,57 +14,64 @@ class AccountingController extends Controller
 {
     public function index(Request $request)
     {
-        $filter = $request->input('filter', 'daily');
+        $filter = $request->input('filter', 'all');
+        $type = $request->input('type', 'all');
 
-        $query = Reservation::query()
-            ->with(['customer', 'space.spaceType', 'spaceType'])
+        $query = TransactionLog::query()
+            ->with(['reservation.spaceType', 'customer', 'processedBy'])
             ->orderByDesc('created_at');
 
-        $this->applyDateFilter($query, $filter);
+        // Filter by type
+        if ($type !== 'all') {
+            $query->where('type', $type);
+        }
 
-    $transactions = (clone $query)->paginate(20)->through(fn ($reservation) => [
-            'id' => $reservation->id,
-            'created_at' => $reservation->created_at,
-            'start_time' => $reservation->start_time,
-            'end_time' => $reservation->end_time,
-            'hours' => $reservation->hours,
-            'pax' => $reservation->pax,
-            'customer' => $reservation->customer ? [
-                'id' => $reservation->customer->id,
-                'name' => $reservation->customer->name ?? $reservation->customer->company_name,
-            ] : null,
-            'space' => $reservation->space ? [
-                'id' => $reservation->space->id,
-                'name' => $reservation->space->name,
-                'space_type' => $reservation->space->spaceType ? [
-                    'id' => $reservation->space->spaceType->id,
-                    'name' => $reservation->space->spaceType->name,
+        // Filter by date
+        if ($filter !== 'all') {
+            $this->applyDateFilter($query, $filter);
+        }
+
+        $transactions = $query->paginate(20)->through(fn ($log) => [
+            'id' => $log->id,
+            'type' => $log->type,
+            'reservation_id' => $log->reservation_id,
+            'reservation' => $log->reservation ? [
+                'id' => $log->reservation->id,
+                'space_type' => $log->reservation->spaceType ? [
+                    'name' => $log->reservation->spaceType->name,
                 ] : null,
             ] : null,
-            'space_type' => $reservation->spaceType ? [
-                'id' => $reservation->spaceType->id,
-                'name' => $reservation->spaceType->name,
+            'customer' => $log->customer ? [
+                'id' => $log->customer->id,
+                'name' => $log->customer->name ?? $log->customer->company_name,
             ] : null,
-            'total_cost' => $reservation->total_cost,
-            'amount_paid' => $reservation->amount_paid ?? 0,
-            'payment_method' => $reservation->payment_method,
-            'status' => $reservation->status,
-            'is_discounted' => $reservation->is_discounted,
-            'notes' => $reservation->notes,
+            'processed_by' => $log->processedBy ? [
+                'id' => $log->processedBy->id,
+                'name' => $log->processedBy->name,
+            ] : null,
+            'amount' => $log->amount,
+            'payment_method' => $log->payment_method,
+            'status' => $log->status,
+            'reference_number' => $log->reference_number,
+            'description' => $log->description,
+            'notes' => $log->notes,
+            'created_at' => $log->created_at,
         ]);
 
-    $revenueTotal = (clone $query)
-            ->paidOrCompleted()
-            ->get()
-            ->sum(fn ($reservation) => $reservation->total_cost);
+        $summary = [
+            'totalPayments' => TransactionLog::where('type', 'payment')->sum('amount'),
+            'totalRefunds' => abs(TransactionLog::where('type', 'refund')->sum('amount')),
+            'netRevenue' => TransactionLog::where('type', 'payment')->sum('amount') + TransactionLog::where('type', 'refund')->sum('amount'),
+            'totalCancellations' => TransactionLog::where('type', 'cancellation')->count(),
+        ];
 
         return Inertia::render('Accounting/Index', [
             'transactions' => $transactions,
-            'filters' => ['filter' => $filter],
-            'summary' => [
-                'totalRevenue' => round($revenueTotal, 2),
-                'transactionCount' => $transactions->total(),
+            'filters' => [
+                'filter' => $filter,
+                'type' => $type,
             ],
+            'summary' => $summary,
         ]);
     }
 

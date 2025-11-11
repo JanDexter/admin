@@ -65,6 +65,15 @@ const getStatusColor = (status) => {
                 <h2 class="font-semibold text-xl text-gray-800 leading-tight">User Details: {{ user.name }}</h2>
                 <div class="flex space-x-2">
                     <Link
+                        :href="route('user-permissions.edit', user.id)"
+                        class="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded inline-flex items-center gap-2"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        Manage Permissions
+                    </Link>
+                    <Link
                         :href="route('user-management.edit', user.id)"
                         class="bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded"
                     >
@@ -115,8 +124,8 @@ const getStatusColor = (status) => {
                                     <div>
                                         <dt class="text-sm font-medium text-gray-500">Role</dt>
                                         <dd class="text-sm text-gray-900">
-                                            <span :class="`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleColor(user.role)}`">
-                                                {{ user.role.toUpperCase() }}
+                                            <span :class="`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleColor(user.role_type)}`">
+                                                {{ user.role_type.toUpperCase() }}
                                             </span>
                                         </dd>
                                     </div>
@@ -165,7 +174,7 @@ const getStatusColor = (status) => {
                             <div class="md:col-span-2">
                                 <h3 class="text-lg font-medium text-gray-900 mb-4">Permissions</h3>
                                 <div class="bg-gray-50 rounded-lg p-4">
-                                    <div v-if="user.role === 'admin'" class="text-sm text-gray-700">
+                                    <div v-if="user.role_type === 'admin'" class="text-sm text-gray-700">
                                         <p class="font-medium text-red-600 mb-2">Administrator Access</p>
                                         <ul class="list-disc list-inside space-y-1">
                                             <li>Full system administration</li>
@@ -175,7 +184,7 @@ const getStatusColor = (status) => {
                                             <li>System configuration</li>
                                         </ul>
                                     </div>
-                                    <div v-else-if="user.role === 'staff'" class="text-sm text-gray-700">
+                                    <div v-else-if="user.role_type === 'staff'" class="text-sm text-gray-700">
                                         <p class="font-medium text-blue-600 mb-2">Staff Access</p>
                                         <ul class="list-disc list-inside space-y-1">
                                             <li>Customer management</li>

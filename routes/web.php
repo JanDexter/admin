@@ -5,21 +5,37 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\UserManagementController;
+use App\Http\Controllers\UserPermissionController;
 use App\Http\Controllers\SpaceManagementController;
 use App\Http\Controllers\PublicReservationController;
 use App\Http\Controllers\CustomerViewController;
 use App\Http\Controllers\Auth\GoogleAuthController;
 use App\Http\Controllers\CalendarController;
-use App\Http\Controllers\AccountingController;
+use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\AdminReservationController;
+use App\Http\Controllers\RefundController;
+use App\Http\Controllers\SetupController;
+use App\Http\Controllers\PasswordChangeController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get('/', CustomerViewController::class)->name('customer.view');
+Route::get('/my-transactions', [CustomerViewController::class, 'transactions'])->middleware(['auth', 'verified'])->name('customer.transactions');
+
+// Password change routes
+Route::post('/password/change/request', [PasswordChangeController::class, 'requestChange'])->middleware(['auth', 'verified'])->name('password.change.request');
+Route::get('/password/change/verify', [PasswordChangeController::class, 'verifyToken'])->name('password.change.verify');
+Route::post('/password/change/update', [PasswordChangeController::class, 'updatePassword'])->name('password.change.update');
 
 Route::get('/auth/google', [GoogleAuthController::class, 'redirectToGoogle'])->name('auth.google.redirect');
 Route::get('/auth/google/callback', [GoogleAuthController::class, 'handleGoogleCallback'])->name('auth.google.callback');
+
+// First-time admin setup routes - only accessible when no admin exists
+Route::middleware('guest')->group(function () {
+    Route::get('/setup', [SetupController::class, 'showSetupForm'])->name('setup.form');
+    Route::post('/setup', [SetupController::class, 'storeAdmin'])->name('setup.store');
+});
 
 $adminPrefix = trim(config('app.admin_area_prefix', 'coz-control'), '/');
 
@@ -40,14 +56,17 @@ Route::get('/health', function () {
     return response()->json(['status' => 'ok']);
 });
 
-// Public reservation endpoint - now requires authentication
-Route::post('/public/reservations', [PublicReservationController::class, 'store'])
-    ->middleware('auth')
-    ->name('public.reservations.store');
+// Public reservation endpoints with rate limiting for security
+Route::middleware(['throttle:60,1'])->group(function () {
+    // Public reservation endpoint - requires authentication AND email verification
+    Route::post('/public/reservations', [PublicReservationController::class, 'store'])
+        ->middleware(['auth', 'verified'])
+        ->name('public.reservations.store');
 
-// Check availability for specific time window - no auth required
-Route::post('/public/check-availability', [PublicReservationController::class, 'checkAvailability'])
-    ->name('public.check-availability');
+    // Check availability for specific time window - no auth required but rate limited
+    Route::post('/public/check-availability', [PublicReservationController::class, 'checkAvailability'])
+        ->name('public.check-availability');
+});
 
 // The registration routes are now handled by the controller and auth.php
 // Route::any('/register', function () {
@@ -83,6 +102,12 @@ Route::middleware(['auth', 'can:admin-access'])->prefix($adminPrefix)->group(fun
         Route::get('user-management/{user}/edit', [UserManagementController::class, 'edit'])->name('user-management.edit');
         Route::match(['put', 'patch'], 'user-management/{user}', [UserManagementController::class, 'update'])->name('user-management.update');
         Route::patch('user-management/{user}/toggle-status', [UserManagementController::class, 'toggleStatus'])->name('user-management.toggle-status');
+        
+        // Permission management routes
+        Route::get('user-management/{user}/permissions', [UserPermissionController::class, 'edit'])->name('user-permissions.edit');
+        Route::put('user-management/{user}/permissions', [UserPermissionController::class, 'update'])->name('user-permissions.update');
+        Route::post('user-management/{user}/permissions/preset', [UserPermissionController::class, 'applyPreset'])->name('user-permissions.apply-preset');
+        Route::post('user-management/{user}/permissions/toggle', [UserPermissionController::class, 'togglePermission'])->name('user-permissions.toggle');
     });
     
     // Space management routes (Admin only)
@@ -103,29 +128,36 @@ Route::middleware(['auth', 'can:admin-access'])->prefix($adminPrefix)->group(fun
         // Payment routes
         Route::post('payments/reservations/{reservation}', [PaymentController::class, 'processPayment'])->name('payments.process');
         Route::post('payments/customers/{customer}', [PaymentController::class, 'processCustomerPayment'])->name('payments.customer');
+        
+        // Refund management routes
+        Route::get('refunds', [RefundController::class, 'index'])->name('refunds.index');
+        Route::post('refunds/{refund}/process', [RefundController::class, 'process'])->name('refunds.process');
+        Route::post('refunds/{refund}/reject', [RefundController::class, 'reject'])->name('refunds.reject');
     });
     
     // Profile routes
     Route::get('profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::match(['patch', 'put'], 'profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     Route::get('calendar', [CalendarController::class, 'index'])->name('calendar');
 
     Route::put('reservations/{reservation}', [AdminReservationController::class, 'update'])->name('admin.reservations.update');
     Route::post('reservations/{reservation}/close', [AdminReservationController::class, 'close'])->name('admin.reservations.close');
+    Route::post('reservations/{reservation}/cancel', [AdminReservationController::class, 'cancel'])->name('admin.reservations.cancel');
+    Route::post('reservations/{reservation}/cancel', [AdminReservationController::class, 'cancel'])->name('admin.reservations.cancel');
 
-    // Accounting routes
-    Route::get('accounting', [AccountingController::class, 'index'])->name('accounting.index');
-    Route::get('accounting/export', [AccountingController::class, 'export'])->name('accounting.export');
-    Route::put('accounting/{reservation}', [AccountingController::class, 'update'])->name('accounting.update');
+    // Transaction routes
+    Route::get('transactions', [TransactionController::class, 'index'])->name('transactions.index');
+    Route::get('transactions/export', [TransactionController::class, 'export'])->name('transactions.export');
+    Route::put('transactions/{reservation}', [TransactionController::class, 'update'])->name('transactions.update');
 });
 
 // Customer reservation management routes (authenticated customers)
 Route::middleware('auth')->group(function () {
     Route::post('reservations/{reservation}/extend', [PublicReservationController::class, 'extend'])->name('reservations.extend');
     Route::post('reservations/{reservation}/end-early', [PublicReservationController::class, 'endEarly'])->name('reservations.end-early');
-    Route::post('reservations/{reservation}/pay', [PaymentController::class, 'processCustomerPayment'])->name('customer.reservations.pay');
+    Route::post('reservations/{reservation}/pay', [PaymentController::class, 'processPayment'])->name('customer.reservations.pay');
     Route::delete('reservations/{reservation}', [PublicReservationController::class, 'destroy'])->name('reservations.destroy');
 });
 

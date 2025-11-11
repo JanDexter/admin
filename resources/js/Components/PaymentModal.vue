@@ -197,6 +197,26 @@ const useSuggestedAmount = () => {
                                             placeholder="Additional notes..."
                                         ></textarea>
                                     </div>
+
+                                    <!-- Refund Policy Notice -->
+                                    <div class="p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
+                                        <div class="flex items-start gap-2">
+                                            <svg class="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                                            </svg>
+                                            <div class="flex-1">
+                                                <h4 class="text-sm font-semibold text-amber-900">Cancellation & Refund Policy</h4>
+                                                <div class="mt-2 text-xs text-amber-800 space-y-1">
+                                                    <p><strong>12+ hours before:</strong> 100% refund</p>
+                                                    <p><strong>6-12 hours before:</strong> 90% refund</p>
+                                                    <p><strong>3-6 hours before:</strong> 75% refund</p>
+                                                    <p><strong>1-3 hours before:</strong> 50% refund</p>
+                                                    <p><strong>Less than 1 hour:</strong> 25% refund</p>
+                                                </div>
+                                                <p class="mt-2 text-xs text-amber-700 italic">Cancellation fees are deducted from the total amount paid.</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

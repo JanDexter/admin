@@ -19,7 +19,7 @@ class DashboardController extends Controller
             'total_customers' => Customer::count(),
             'active_customers' => Customer::where('status', 'active')->count(),
             'inactive_customers' => Customer::where('status', 'inactive')->count(),
-            'customer_users' => User::where('role', 'customer')->count(),
+            'customer_users' => User::whereHas('customer')->count(),
             'total_users' => User::count(),
         ];
 
@@ -41,19 +41,37 @@ class DashboardController extends Controller
                 return [
                     'id' => $reservation->id,
                     'customer_name' => $reservation->customer->company_name ?? $reservation->customer->name ?? 'N/A',
+                    'customer_email' => $reservation->customer->email ?? null,
+                    'customer_phone' => $reservation->customer->phone ?? null,
                     'space_name' => $reservation->space->name ?? 'N/A',
                     'space_type' => $reservation->space->spaceType->name ?? 'N/A',
                     'start_time' => $reservation->start_time,
                     'end_time' => $reservation->end_time,
                     'cost' => $cost,
+                    'total_cost' => $reservation->total_cost,
                     'status' => $reservation->status,
+                    'payment_method' => $reservation->payment_method,
+                    'amount_paid' => $reservation->amount_paid,
+                    'amount_remaining' => $reservation->amount_remaining,
+                    'hours' => $reservation->hours,
+                    'pax' => $reservation->pax,
+                    'is_open_time' => $reservation->is_open_time,
+                    'notes' => $reservation->notes,
                 ];
             });
 
-        // Get active services (ongoing reservations)
+        // Get active services (currently in-use reservations from calendar)
+        // A service is "active" if:
+        // 1. It has started (start_time <= now)
+        // 2. It hasn't ended yet (end_time is null OR end_time > now)
+        // 3. Status is not completed or cancelled
         $activeServices = Reservation::with(['customer', 'space.spaceType'])
-            ->whereIn('status', ['active'])
-            ->whereNull('end_time')
+            ->where('start_time', '<=', now())
+            ->where(function($query) {
+                $query->whereNull('end_time')
+                      ->orWhere('end_time', '>', now());
+            })
+            ->whereNotIn('status', ['completed', 'cancelled'])
             ->orderBy('start_time', 'desc')
             ->get()
             ->map(function($reservation) {
@@ -63,6 +81,8 @@ class DashboardController extends Controller
                     'space_name' => $reservation->space->name ?? 'N/A',
                     'space_type' => $reservation->space->spaceType->name ?? 'N/A',
                     'start_time' => $reservation->start_time,
+                    'end_time' => $reservation->end_time,
+                    'status' => $reservation->status,
                     'hourly_rate' => $reservation->effective_hourly_rate,
                     'is_open_time' => $reservation->is_open_time,
                 ];

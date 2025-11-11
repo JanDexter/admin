@@ -1,6 +1,6 @@
-# Customer Management Dashboard
+# CO-Z Reservation System
 
-A modern, full-featured web application built with Laravel 11, Inertia.js, and Vue.js for comprehensive customer relationship management. This application provides a streamlined admin interface focused on customer data management and co-workspace service reservations.
+A modern, full-featured web application built with Laravel 11, Inertia.js, and Vue.js for comprehensive reservation system. This application provides a streamlined admin interface and customer interface focused on co-workspace service reservations.
 
 ## 🏁 Final Stack & Modules
 
@@ -51,14 +51,13 @@ A modern, full-featured web application built with Laravel 11, Inertia.js, and V
 
 ## 🚀 About This Project
 
-This project is a Customer Management Dashboard. It provides a comprehensive interface for managing customers, tasks, services, and users.
+This project is a Reservation System. 
 
 ## ✨ Features
 
 ### Core Management
 *   **User Roles:** Admin role with ability to create and manage other users.
 *   **Customer Management:** CRUD operations for customer records with standardized company name handling.
-*   **Task Management:** Assign and track tasks related to customers.
 *   **Service Management:** Define and manage services offered with automatic pricing.
 *   **User Management:** Admin-only interface to manage users with enhanced filtering.
 

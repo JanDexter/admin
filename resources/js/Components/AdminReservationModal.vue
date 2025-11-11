@@ -37,6 +37,9 @@ const paymentOptions = [
 
 const localReservation = ref(null);
 const closingReservation = ref(false);
+const cancellingReservation = ref(false);
+const showCancelModal = ref(false);
+const cancelReason = ref('');
 
 const form = useForm({
     status: 'pending',
@@ -157,6 +160,42 @@ const closeReservation = () => {
             closingReservation.value = false;
         },
     });
+};
+
+const openCancelModal = () => {
+    if (localReservation.value && 
+        !['completed', 'cancelled'].includes(localReservation.value.status)) {
+        showCancelModal.value = true;
+        cancelReason.value = '';
+    }
+};
+
+const closeCancelModal = () => {
+    if (!cancellingReservation.value) {
+        showCancelModal.value = false;
+        cancelReason.value = '';
+    }
+};
+
+const cancelReservation = () => {
+    if (!localReservation.value || cancellingReservation.value) return;
+
+    cancellingReservation.value = true;
+    router.post(
+        route('admin.reservations.cancel', localReservation.value.id),
+        { reason: cancelReason.value },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                showCancelModal.value = false;
+                cancelReason.value = '';
+                emit('updated');
+            },
+            onFinish: () => {
+                cancellingReservation.value = false;
+            },
+        }
+    );
 };
 </script>
 
@@ -343,15 +382,25 @@ const closeReservation = () => {
                     <button
                         type="button"
                         class="inline-flex items-center justify-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
-                        :disabled="form.processing || closingReservation"
+                        :disabled="form.processing || closingReservation || cancellingReservation"
                         @click="handleClose"
                     >
-                        Cancel
+                        Close
                     </button>
                     <button
+                        v-if="localReservation && !['completed', 'cancelled', 'active'].includes(localReservation.status)"
                         type="button"
                         class="inline-flex items-center justify-center rounded-lg border border-transparent bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                        :disabled="form.processing || closingReservation"
+                        :disabled="form.processing || closingReservation || cancellingReservation"
+                        @click="openCancelModal"
+                    >
+                        Cancel Reservation
+                    </button>
+                    <button
+                        v-if="localReservation && localReservation.status === 'active'"
+                        type="button"
+                        class="inline-flex items-center justify-center rounded-lg border border-transparent bg-orange-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        :disabled="form.processing || closingReservation || cancellingReservation"
                         @click="closeReservation"
                     >
                         {{ closingReservation ? 'Closing…' : 'Mark as Completed' }}
@@ -359,12 +408,76 @@ const closeReservation = () => {
                     <button
                         type="button"
                         class="inline-flex items-center justify-center rounded-lg border border-transparent bg-[#2f4686] px-4 py-2 text-sm font-semibold text-white shadow hover:bg-[#3956a3] disabled:cursor-not-allowed disabled:opacity-50"
-                        :disabled="form.processing || closingReservation"
+                        :disabled="form.processing || closingReservation || cancellingReservation"
                         @click="submit"
                     >
                         {{ form.processing ? 'Saving…' : 'Save Changes' }}
                     </button>
                 </div>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Cancel Reservation Modal -->
+    <div v-if="showCancelModal" class="fixed inset-0 z-[60] flex items-center justify-center px-4">
+        <div class="absolute inset-0 bg-black/70" @click="closeCancelModal"></div>
+        <div class="relative z-10 w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <header class="bg-gradient-to-r from-red-600 to-red-700 px-6 py-4 text-white">
+                <h3 class="text-lg font-semibold">Cancel Reservation</h3>
+                <p class="text-sm text-red-100">This action will cancel the reservation and process any applicable refunds</p>
+            </header>
+
+            <div class="px-6 py-6">
+                <div class="mb-4 rounded-lg bg-yellow-50 border border-yellow-200 p-4">
+                    <div class="flex items-start gap-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <div class="text-sm text-yellow-800">
+                            <p class="font-semibold mb-1">Cancellation Policy</p>
+                            <ul class="list-disc list-inside space-y-0.5 text-xs">
+                                <li>24+ hours before: 100% refund</li>
+                                <li>12-24 hours: 75% refund</li>
+                                <li>6-12 hours: 50% refund</li>
+                                <li>Less than 6 hours: 25% refund</li>
+                                <li>After start time: No refund</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="mb-2 block text-sm font-semibold text-gray-700" for="cancel-reason">
+                        Reason for Cancellation (Optional)
+                    </label>
+                    <textarea
+                        id="cancel-reason"
+                        v-model="cancelReason"
+                        rows="3"
+                        placeholder="Enter reason for cancelling this reservation..."
+                        class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:ring-red-500"
+                        :disabled="cancellingReservation"
+                    ></textarea>
+                </div>
+            </div>
+
+            <footer class="flex gap-2 border-t border-gray-200 bg-gray-50 px-6 py-4">
+                <button
+                    type="button"
+                    class="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
+                    :disabled="cancellingReservation"
+                    @click="closeCancelModal"
+                >
+                    Keep Reservation
+                </button>
+                <button
+                    type="button"
+                    class="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+                    :disabled="cancellingReservation"
+                    @click="cancelReservation"
+                >
+                    {{ cancellingReservation ? 'Cancelling…' : 'Confirm Cancellation' }}
+                </button>
             </footer>
         </div>
     </div>

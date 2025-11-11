@@ -5,11 +5,15 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Customer;
+use App\Models\Admin;
+use App\Models\EmailVerificationOtp;
+use App\Mail\VerificationOtpMail;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rules;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -42,36 +46,47 @@ class RegisteredUserController extends Controller
 
         $isFirstUser = User::count() === 0;
 
-        $user = new User([
+        $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'phone' => $request->phone,
-            'password' => Hash::make($request->password),
+            'password' => $request->password, // Use the validated password directly
+            'is_active' => $isFirstUser ? true : false, // First user (admin) is active, others must verify email
         ]);
-        // First user becomes admin; others are customers by default
-        $user->role = $isFirstUser ? User::ROLE_ADMIN : User::ROLE_CUSTOMER;
-        $user->is_active = true;
-        $user->save();
 
-        // Automatically create a Customer record for customer users
-        if ($user->role === User::ROLE_CUSTOMER) {
+        // First user becomes admin, others become customers
+        if ($isFirstUser) {
+            Admin::create([
+                'user_id' => $user->id,
+                'permission_level' => 'super_admin',
+                'permissions' => ['*'],
+            ]);
+        } else {
+            // Automatically create a Customer record for new users
             Customer::create([
                 'user_id' => $user->id,
                 'name' => $request->name,
                 'email' => $request->email,
                 'phone' => $request->phone,
-                'status' => 'active',
+                'status' => 'pending', // Set to pending until email verified
             ]);
         }
 
         event(new Registered($user));
 
-        Auth::login($user);
-
-        // Redirect based on role
-        if ($user->isAdmin()) {
+        // First user (admin) logs in automatically, others must verify email
+        if ($isFirstUser) {
+            Auth::login($user);
             return redirect()->route('dashboard');
         }
-        return redirect()->route('customer.view');
+
+        // For customers, generate and send OTP
+        $otp = EmailVerificationOtp::generateForUser($user);
+        Mail::to($user->email)->send(new VerificationOtpMail($user, $otp));
+
+        // Log them in temporarily to show verification notice
+        // They won't be able to access protected routes until verified
+        Auth::login($user);
+        return redirect()->route('customer.verification.notice');
     }
 }
