@@ -3,6 +3,8 @@
 .env
 .env.backup
 .env.production
+.env.local
+.env.staging
 .phpactor.json
 .phpunit.result.cache
 /.fleet
@@ -23,3 +25,11 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 GOOGLE_OAUTH*.md
+
+# Deployment credentials and sensitive files
+*-credentials.txt
+*-db-credentials.txt
+*.pem
+*.key
+*.crt
+deployment-passwords.txt

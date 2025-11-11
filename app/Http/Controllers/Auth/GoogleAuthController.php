@@ -120,7 +120,7 @@ class GoogleAuthController extends Controller
                 'name'              => $googleUser->getName() ?: trim(strtok($googleUser->getEmail(), '@')),
                 'email'             => $googleUser->getEmail(),
                 'password'          => \Illuminate\Support\Str::random(32), // hashed by casts
-                'role'              => User::ROLE_CUSTOMER,
+                'role'              => 'customer',
                 'is_active'         => true,
                 'email_verified_at' => now(),
                 'google_id'         => $googleUser->getId(),

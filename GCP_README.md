@@ -64,27 +64,23 @@ cd /workspace
 
 ### Option 3: Compute Engine E2 Micro (Most cost-effective) ⭐
 
-```bash
-# 1. Create instance and upload files
-gcloud compute instances create admin-app \
-  --zone=us-central1-a \
-  --machine-type=e2-micro \
-  --boot-disk-size=20GB \
-  --image-family=ubuntu-2204-lts \
-  --image-project=ubuntu-os-cloud \
-  --tags=http-server,https-server
+Follow the detailed guide in `GCE_E2_DEPLOYMENT.md`.
 
-# 2. Upload application and setup script
-tar -czf admin-app.tar.gz --exclude='node_modules' --exclude='vendor' .
-gcloud compute scp admin-app.tar.gz admin-app:~ --zone=us-central1-a
-gcloud compute scp gce-e2-setup.sh admin-app:~ --zone=us-central1-a
-
-# 3. SSH and run setup
-gcloud compute ssh admin-app --zone=us-central1-a
-tar -xzf admin-app.tar.gz
-chmod +x gce-e2-setup.sh
-sudo ./gce-e2-setup.sh
-```
+**Quick Steps:**
+1.  Create a GCE instance (see guide for command).
+2.  Upload the setup script:
+    ```bash
+    # Replace my-instance with your instance name
+    gcloud compute scp gce-e2-setup.sh my-instance:~ --zone=us-central1-a
+    ```
+3.  SSH into the instance and run the script:
+    ```bash
+    gcloud compute ssh my-instance --zone=us-central1-a
+    
+    # Inside the instance:
+    chmod +x gce-e2-setup.sh
+    sudo ./gce-e2-setup.sh --with-sample-data
+    ```
 
 **See `GCE_E2_DEPLOYMENT.md` for complete E2 micro setup guide.**
 

@@ -26,7 +26,8 @@
 
 ### 1. Create Instance
 ```bash
-gcloud compute instances create admin-app \
+# Replace my-instance with whatever name you want
+gcloud compute instances create my-instance \
   --zone=us-central1-a \
   --machine-type=e2-micro \
   --boot-disk-size=20GB \
@@ -41,15 +42,15 @@ gcloud compute instances create admin-app \
 # Create tarball
 tar -czf admin-app.tar.gz --exclude='node_modules' --exclude='vendor' --exclude='.git' .
 
-# Upload to instance
-gcloud compute scp admin-app.tar.gz admin-app:~ --zone=us-central1-a
-gcloud compute scp gce-e2-setup.sh admin-app:~ --zone=us-central1-a
+# Upload to instance (replace my-instance with your instance name)
+gcloud compute scp admin-app.tar.gz my-instance:~ --zone=us-central1-a
+gcloud compute scp gce-e2-setup.sh my-instance:~ --zone=us-central1-a
 ```
 
 ### 3. Run Setup
 ```bash
 # SSH into instance
-gcloud compute ssh admin-app --zone=us-central1-a
+gcloud compute ssh my-instance --zone=us-central1-a
 
 # Extract and setup
 tar -xzf admin-app.tar.gz
@@ -65,12 +66,14 @@ sudo ./gce-e2-setup.sh --with-sample-data
 ### 4. Access Application
 ```bash
 # Get instance IP
-gcloud compute instances describe admin-app \
+gcloud compute instances describe my-instance \
   --zone=us-central1-a \
   --format='get(networkInterfaces[0].accessConfigs[0].natIP)'
 
 # Open in browser: http://YOUR_IP
 ```
+
+**Note**: If you already have an instance, see `EXISTING_INSTANCE_DEPLOY.md` for deployment to existing instances.
 
 ---
 

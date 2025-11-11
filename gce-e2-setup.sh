@@ -84,25 +84,23 @@ sudo mysql -u root -ptemporary_root_password -e "GRANT ALL PRIVILEGES ON admin_d
 sudo mysql -u root -ptemporary_root_password -e "FLUSH PRIVILEGES;"
 
 echo ""
-echo -e "${GREEN}Step 4: Setting up application directory...${NC}"
+echo -e "${GREEN}Step 4: Cloning application from GitHub...${NC}"
 
-# Create application directory
+# Create application directory and clone repository
 APP_DIR="/var/www/admin"
-sudo mkdir -p $APP_DIR
-sudo chown -R $USER:$USER $APP_DIR
+REPO_URL="https://github.com/JanDexter/coz-reservation.git"
 
-# If not already cloned, we assume files are already in current directory
-if [ ! -f "composer.json" ]; then
-    echo -e "${RED}Error: composer.json not found. Please run this script from the application directory.${NC}"
-    exit 1
-fi
-
-# Copy files to app directory if not already there
-if [ "$PWD" != "$APP_DIR" ]; then
-    echo "Copying application files to $APP_DIR..."
-    sudo cp -r . $APP_DIR/
+if [ -d "$APP_DIR" ]; then
+    echo "Application directory $APP_DIR already exists. Pulling latest changes..."
     cd $APP_DIR
+    sudo -u $USER git pull
+else
+    echo "Cloning repository into $APP_DIR..."
+    sudo git clone $REPO_URL $APP_DIR
 fi
+
+sudo chown -R $USER:$USER $APP_DIR
+cd $APP_DIR
 
 echo ""
 echo -e "${GREEN}Step 5: Installing application dependencies...${NC}"
@@ -170,7 +168,15 @@ sudo chmod -R 775 $APP_DIR/storage
 sudo chmod -R 775 $APP_DIR/bootstrap/cache
 
 echo ""
-echo -e "${GREEN}Step 10: Configuring Nginx...${NC}"
+echo -e "${GREEN}Step 10: Generating Self-Signed SSL Certificate...${NC}"
+sudo mkdir -p /etc/nginx/ssl
+sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout /etc/nginx/ssl/nginx-selfsigned.key \
+    -out /etc/nginx/ssl/nginx-selfsigned.crt \
+    -subj "/C=US/ST=California/L=SanFrancisco/O=Admin/OU=IT/CN=$(curl -s ifconfig.me || echo localhost)"
+
+echo ""
+echo -e "${GREEN}Step 11: Configuring Nginx with SSL...${NC}"
 
 # Create Nginx configuration
 sudo tee /etc/nginx/sites-available/admin > /dev/null <<'EOF'
@@ -178,7 +184,21 @@ server {
     listen 80;
     listen [::]:80;
     server_name _;
+    # Redirect all HTTP requests to HTTPS
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name _;
     root /var/www/admin/public;
+
+    # SSL configuration
+    ssl_certificate /etc/nginx/ssl/nginx-selfsigned.crt;
+    ssl_certificate_key /etc/nginx/ssl/nginx-selfsigned.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
 
     add_header X-Frame-Options "SAMEORIGIN";
     add_header X-Content-Type-Options "nosniff";
@@ -227,7 +247,7 @@ sudo systemctl restart php8.4-fpm
 sudo systemctl restart nginx
 
 echo ""
-echo -e "${GREEN}Step 11: Configuring firewall...${NC}"
+echo -e "${GREEN}Step 12: Configuring firewall...${NC}"
 
 # Allow HTTP and HTTPS
 sudo ufw allow 'Nginx Full'
@@ -235,7 +255,7 @@ sudo ufw allow 22/tcp
 sudo ufw --force enable
 
 echo ""
-echo -e "${GREEN}Step 12: Setting up automatic restarts...${NC}"
+echo -e "${GREEN}Step 13: Setting up automatic restarts...${NC}"
 
 # Enable services to start on boot
 sudo systemctl enable nginx
@@ -250,7 +270,9 @@ echo ""
 echo "Your application is now running!"
 echo ""
 echo "Access your application at:"
-echo "  http://$(curl -s ifconfig.me)"
+echo "  https://$(curl -s ifconfig.me)"
+echo ""
+echo -e "${YELLOW}NOTE: You will see a browser warning because the SSL certificate is self-signed. This is expected. You can proceed safely.${NC}"
 echo ""
 echo "Database credentials:"
 echo "  Database: admin_dashboard"
@@ -263,7 +285,7 @@ echo -e "${YELLOW}IMPORTANT SECURITY STEPS:${NC}"
 echo "1. Change MySQL root password immediately"
 echo "2. Change database user password"
 echo "3. Update .env file with new passwords"
-echo "4. Set up SSL certificate (Let's Encrypt recommended)"
+echo "4. For a production site, replace the self-signed SSL with a trusted one (e.g., from Let's Encrypt)"
 echo "5. Change admin panel password after first login"
 echo "6. Review and update security settings"
 echo ""
@@ -279,10 +301,10 @@ if [ "$WITH_SAMPLE_DATA" = true ]; then
 fi
 
 echo "Next steps:"
-echo "1. Set up SSL with: sudo certbot --nginx -d your-domain.com"
-echo "2. Configure your domain DNS to point to: $(curl -s ifconfig.me)"
-echo "3. Update APP_URL in .env to your domain"
-echo "4. Run: php artisan config:cache"
+echo "1. Configure your domain DNS to point to: $(curl -s ifconfig.me)"
+echo "2. Update APP_URL in .env to your domain (e.g., https://your-domain.com)"
+echo "3. Re-cache config: php artisan config:cache"
+echo "4. (Optional) Replace self-signed SSL with Let's Encrypt: sudo certbot --nginx -d your-domain.com"
 echo ""
 echo "To view logs:"
 echo "  Application: tail -f $APP_DIR/storage/logs/laravel.log"
