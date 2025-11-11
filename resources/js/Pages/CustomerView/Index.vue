@@ -2734,16 +2734,6 @@ const copyToClipboard = async (text, label = 'Text') => {
                         <a :href="route('login')" class="flex items-center justify-center gap-2 rounded-xl border border-[#2f4686] text-[#2f4686] hover:bg-[#eef2ff] font-semibold text-sm px-4 py-3 transition-colors">
                             Log In
                         </a>
-                        <a :href="googleAuthUrl" class="flex items-center justify-center gap-2 rounded-xl border border-slate-200 hover:border-slate-300 text-slate-700 font-semibold text-sm px-4 py-3 transition-colors">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 48 48">
-                                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.28 9.21 3.77l6.84-6.84C35.1 2.53 29.92 0 24 0 14.64 0 6.51 5.38 2.69 13.22l7.98 6.2C12.37 13.99 17.74 9.5 24 9.5z" />
-                                <path fill="#4285F4" d="M46.5 24c0-1.63-.15-3.2-.42-4.71H24v9.02h12.7c-.55 2.97-2.21 5.5-4.7 7.19l7.18 5.59C43.73 36.79 46.5 30.86 46.5 24z" />
-                                <path fill="#FBBC05" d="M10.67 28.02c-.48-1.45-.76-3-.76-4.59s.27-3.14.76-4.59l-7.98-6.2C.96 15.82 0 19.29 0 23c0 3.71.96 7.18 2.69 10.36l7.98-5.34z" />
-                                <path fill="#34A853" d="M24 46c5.92 0 11.09-1.95 14.78-5.29l-7.18-5.59c-2 1.35-4.56 2.14-7.6 2.14-6.26 0-11.62-4.49-13.35-10.52l-7.98 5.34C6.51 42.62 14.64 48 24 48z" />
-                                <path fill="none" d="M0 0h48v48H0z" />
-                            </svg>
-                            Continue with Google
-                        </a>
                     </div>
                 </div>
             </div>
