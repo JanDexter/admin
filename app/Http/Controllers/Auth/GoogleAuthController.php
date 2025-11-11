@@ -116,16 +116,26 @@ class GoogleAuthController extends Controller
             ->first();
 
         if (!$user) {
+            // Create new user
             $user = User::create([
                 'name'              => $googleUser->getName() ?: trim(strtok($googleUser->getEmail(), '@')),
                 'email'             => $googleUser->getEmail(),
                 'password'          => \Illuminate\Support\Str::random(32), // hashed by casts
-                'role'              => 'customer',
                 'is_active'         => true,
                 'email_verified_at' => now(),
                 'google_id'         => $googleUser->getId(),
                 'avatar'            => $googleUser->getAvatar(),
             ]);
+
+            // Immediately create the customer profile for the new user
+            Customer::create([
+                'user_id' => $user->id,
+                'name'    => $googleUser->getName() ?: trim(strtok($googleUser->getEmail(), '@')),
+                'email'   => $googleUser->getEmail(),
+            ]);
+
+            // Refresh user to load the customer relationship
+            $user->refresh();
         } else {
             // Keep user profile in sync
             $user->fill([
@@ -134,21 +144,16 @@ class GoogleAuthController extends Controller
                 'avatar'    => $googleUser->getAvatar() ?: $user->avatar,
                 'is_active' => true,
             ])->save();
-        }
 
-        // Ensure a Customer profile exists and is linked to the User
-        $displayName = $googleUser->getName() ?: trim(strtok($googleUser->getEmail(), '@'));
-        $customer = Customer::firstOrCreate(
-            ['email' => $googleUser->getEmail()],
-            [
-                'name'    => $displayName,
-                // other default fields can be null
-            ]
-        );
-
-        if (!$customer->user_id) {
-            $customer->user_id = $user->id;
-            $customer->save();
+            // Ensure a Customer profile exists and is linked to the User
+            if (!$user->customer) {
+                Customer::create([
+                    'user_id' => $user->id,
+                    'name'    => $googleUser->getName() ?: trim(strtok($googleUser->getEmail(), '@')),
+                    'email'   => $googleUser->getEmail(),
+                ]);
+                $user->refresh();
+            }
         }
 
         return $user; // Return Authenticatable User for session login
