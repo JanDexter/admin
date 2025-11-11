@@ -1,5 +1,81 @@
 # Quick Setup Guide for Google Cloud
 
+## Choose Your Deployment Method
+
+### Option 1: Compute Engine E2 Micro (RECOMMENDED - Most Cost-Effective)
+- **Cost**: ~$7-10/month (FREE tier eligible!)
+- **Best for**: Budget-conscious, full control, small-medium traffic
+- **Setup time**: ~10-15 minutes
+- **See**: `GCE_E2_DEPLOYMENT.md` for complete guide
+
+### Option 2: App Engine (Easiest - Fully Managed)
+- **Cost**: ~$50-100/month
+- **Best for**: Zero server management, auto-scaling
+- **Setup time**: ~5-10 minutes
+- **See**: `DEPLOYMENT.md` for complete guide
+
+### Option 3: Cloud Run (Flexible - Containerized)
+- **Cost**: ~$20-50/month
+- **Best for**: Container-based, flexible scaling
+- **Setup time**: ~10-15 minutes
+- **See**: `DEPLOYMENT.md` for complete guide
+
+---
+
+## E2 Micro Quick Setup (Recommended)
+
+### 1. Create Instance
+```bash
+gcloud compute instances create admin-app \
+  --zone=us-central1-a \
+  --machine-type=e2-micro \
+  --boot-disk-size=20GB \
+  --boot-disk-type=pd-standard \
+  --image-family=ubuntu-2204-lts \
+  --image-project=ubuntu-os-cloud \
+  --tags=http-server,https-server
+```
+
+### 2. Upload Files
+```bash
+# Create tarball
+tar -czf admin-app.tar.gz --exclude='node_modules' --exclude='vendor' --exclude='.git' .
+
+# Upload to instance
+gcloud compute scp admin-app.tar.gz admin-app:~ --zone=us-central1-a
+gcloud compute scp gce-e2-setup.sh admin-app:~ --zone=us-central1-a
+```
+
+### 3. Run Setup
+```bash
+# SSH into instance
+gcloud compute ssh admin-app --zone=us-central1-a
+
+# Extract and setup
+tar -xzf admin-app.tar.gz
+chmod +x gce-e2-setup.sh
+
+# Run setup (production)
+sudo ./gce-e2-setup.sh
+
+# OR with sample data (testing/demo)
+sudo ./gce-e2-setup.sh --with-sample-data
+```
+
+### 4. Access Application
+```bash
+# Get instance IP
+gcloud compute instances describe admin-app \
+  --zone=us-central1-a \
+  --format='get(networkInterfaces[0].accessConfigs[0].natIP)'
+
+# Open in browser: http://YOUR_IP
+```
+
+---
+
+## App Engine Quick Setup
+
 ## First-Time Deployment Checklist
 
 ### 1. Prerequisites

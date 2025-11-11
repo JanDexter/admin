@@ -90,9 +90,9 @@ sudo ./gce-e2-setup.sh
 
 ## Setup Scripts
 
-### gcp-setup.sh (First-Time Setup)
+### gcp-setup.sh (App Engine First-Time Setup)
 
-Run this script **after first deployment** to:
+Run this script **after App Engine deployment** to:
 - Run database migrations
 - Seed admin user and initial spaces
 - Optionally seed sample data (customers, reservations, transactions)
@@ -108,21 +108,57 @@ Run this script **after first deployment** to:
 ./gcp-setup.sh --with-sample-data
 ```
 
-### gcp-deploy.sh (Regular Deployments)
+### gcp-deploy.sh (App Engine Regular Deployments)
 
-Automatically runs after each deployment to:
+Automatically runs after each App Engine deployment to:
 - Run database migrations
 - Clear and cache configuration
 - Set permissions
 
 This does NOT re-seed data.
 
+### gce-e2-setup.sh (E2 Micro Complete Setup)
+
+Complete automated setup script for Compute Engine e2-micro instance:
+- Installs all required software (PHP 8.4, Nginx, MySQL, Node.js)
+- Configures database and creates admin user
+- Installs application dependencies
+- Builds frontend assets
+- Runs migrations and seeds data
+- Configures Nginx and firewall
+- Sets up automatic service restarts
+
+**Usage:**
+```bash
+# Production setup
+sudo ./gce-e2-setup.sh
+
+# With sample data (testing/demo)
+sudo ./gce-e2-setup.sh --with-sample-data
+```
+
 ## Prerequisites
 
+### For App Engine/Cloud Run:
 1. Google Cloud account with billing enabled
 2. `gcloud` CLI installed and authenticated
 3. Cloud SQL instance created for database
 4. Secrets configured in Secret Manager
+
+### For Compute Engine E2 Micro:
+1. Google Cloud account with billing enabled
+2. `gcloud` CLI installed and authenticated
+3. No additional setup required (MySQL installed on same instance)
+
+## Cost Comparison
+
+| Deployment | Monthly Cost | Pros | Cons |
+|------------|--------------|------|------|
+| **E2 Micro** | ~$7-10 (FREE tier eligible) | Full control, cheapest, simple | Manual updates, less scalable |
+| **Cloud Run** | ~$20-50 | Containerized, scales to zero | More complex setup |
+| **App Engine** | ~$50-100 | Fully managed, auto-scaling | Most expensive |
+
+⭐ **Recommended**: Start with E2 micro for cost savings, upgrade to App Engine as traffic grows.
 
 ## Sample Data
 
@@ -133,7 +169,9 @@ When using `--with-sample-data` flag, the setup will create:
 
 **Note:** Only use sample data for testing/demo environments, not production!
 
-## Full Documentation
+## Documentation
 
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for complete setup instructions.
+- **[GCE_E2_DEPLOYMENT.md](./GCE_E2_DEPLOYMENT.md)** - Complete E2 micro deployment guide (RECOMMENDED)
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - App Engine and Cloud Run deployment guide
+- **[SETUP_QUICK_GUIDE.md](./SETUP_QUICK_GUIDE.md)** - Quick reference for all deployment methods
 
