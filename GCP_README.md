@@ -2,6 +2,26 @@
 
 This directory contains configuration files for deploying the application to Google Cloud Platform (GCP).
 
+## Deployment Options
+
+### 1. App Engine (Managed, Serverless)
+- **Cost**: ~$50-100/month
+- **Best for**: Zero server management, auto-scaling
+- **Setup**: Simple, fully managed
+- **Guide**: See `DEPLOYMENT.md`
+
+### 2. Cloud Run (Containerized, Serverless)
+- **Cost**: ~$20-50/month
+- **Best for**: Container-based deployments, flexible scaling
+- **Setup**: Docker-based
+- **Guide**: See `DEPLOYMENT.md`
+
+### 3. Compute Engine E2 Micro (VM-based)
+- **Cost**: ~$7-10/month (FREE tier eligible!)
+- **Best for**: Budget-conscious, full control, small-medium traffic
+- **Setup**: Traditional VM deployment
+- **Guide**: See `GCE_E2_DEPLOYMENT.md` ⭐ **RECOMMENDED FOR COST SAVINGS**
+
 ## Files Overview
 
 - **app.yaml** - App Engine configuration
@@ -10,8 +30,10 @@ This directory contains configuration files for deploying the application to Goo
 - **deploy.sh** - Quick deployment script
 - **gcp-build.sh** - Build script for App Engine
 - **gcp-deploy.sh** - Post-deployment script (for updates)
-- **gcp-setup.sh** - First-time setup script (with data seeding)
-- **DEPLOYMENT.md** - Complete deployment guide
+- **gcp-setup.sh** - First-time setup script (with data seeding) for App Engine
+- **gce-e2-setup.sh** - Complete setup script for E2 micro instance
+- **DEPLOYMENT.md** - Complete App Engine/Cloud Run deployment guide
+- **GCE_E2_DEPLOYMENT.md** - Complete E2 micro deployment guide
 
 ## Quick Start
 
@@ -39,6 +61,32 @@ cd /workspace
 # Deploy
 ./deploy.sh cloud-run
 ```
+
+### Option 3: Compute Engine E2 Micro (Most cost-effective) ⭐
+
+```bash
+# 1. Create instance and upload files
+gcloud compute instances create admin-app \
+  --zone=us-central1-a \
+  --machine-type=e2-micro \
+  --boot-disk-size=20GB \
+  --image-family=ubuntu-2204-lts \
+  --image-project=ubuntu-os-cloud \
+  --tags=http-server,https-server
+
+# 2. Upload application and setup script
+tar -czf admin-app.tar.gz --exclude='node_modules' --exclude='vendor' .
+gcloud compute scp admin-app.tar.gz admin-app:~ --zone=us-central1-a
+gcloud compute scp gce-e2-setup.sh admin-app:~ --zone=us-central1-a
+
+# 3. SSH and run setup
+gcloud compute ssh admin-app --zone=us-central1-a
+tar -xzf admin-app.tar.gz
+chmod +x gce-e2-setup.sh
+sudo ./gce-e2-setup.sh
+```
+
+**See `GCE_E2_DEPLOYMENT.md` for complete E2 micro setup guide.**
 
 ## Setup Scripts
 
