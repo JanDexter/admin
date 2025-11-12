@@ -91,24 +91,26 @@ const isReactivation = computed(
                 </p>
             </div>
 
-            <div class="flex items-center justify-between gap-4">
+            <div class="space-y-3">
                 <PrimaryButton
                     :class="{ 'opacity-25': otpForm.processing }"
                     :disabled="otpForm.processing || otpForm.otp.length !== 6"
-                    class="flex-1"
+                    class="w-full justify-center py-2.5"
                 >
                     Verify Code
                 </PrimaryButton>
 
-                <button
-                    type="button"
-                    @click="resendOtp"
-                    :disabled="resendForm.processing"
-                    :class="{ 'opacity-25': resendForm.processing }"
-                    class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition"
-                >
-                    Resend Code
-                </button>
+                <div class="text-center">
+                    <button
+                        type="button"
+                        @click="resendOtp"
+                        :disabled="resendForm.processing"
+                        :class="{ 'opacity-25': resendForm.processing }"
+                        class="text-sm text-gray-600 hover:text-gray-900 underline focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2f4686] rounded transition"
+                    >
+                        Resend Code
+                    </button>
+                </div>
             </div>
         </form>
 

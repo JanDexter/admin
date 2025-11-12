@@ -25,8 +25,22 @@ class ProfileUpdateRequest extends FormRequest
                 'max:255',
                 Rule::unique(User::class)->ignore($this->user()->id),
             ],
-            'phone' => ['nullable', 'string', 'max:20'],
+            'phone' => [
+                'nullable',
+                'string',
+                'regex:/^(\+639|09)\d{9}$/',
+            ],
             'company_name' => ['nullable', 'string', 'max:255'],
+        ];
+    }
+    
+    /**
+     * Get custom error messages for validator errors.
+     */
+    public function messages(): array
+    {
+        return [
+            'phone.regex' => 'Phone number must be in the format 09XXXXXXXXX or +639XXXXXXXXX',
         ];
     }
 }

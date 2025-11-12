@@ -580,12 +580,19 @@ const updateProfile = () => {
     
     router.put(route('profile.update'), profileForm.value, {
         preserveScroll: true,
-        onSuccess: () => {
-            showToast('Profile updated successfully!', 'success');
+        onSuccess: (page) => {
+            const status = page.props.status;
+            if (status === 'email-verification-sent') {
+                showToast('Verification email sent! Please check your new email address to confirm the change.', 'success', 5000);
+                showAccountSettings.value = false;
+            } else {
+                showToast('Profile updated successfully!', 'success');
+            }
             profileUpdateLoading.value = false;
         },
         onError: (errors) => {
-            showToast(errors.message || 'Failed to update profile.', 'error');
+            const errorMessage = errors.phone || errors.email || errors.name || errors.message || 'Failed to update profile.';
+            showToast(errorMessage, 'error');
             profileUpdateLoading.value = false;
         },
         onFinish: () => {

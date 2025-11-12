@@ -41,7 +41,13 @@ class RegisteredUserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
-            'phone' => 'nullable|string|max:20',
+            'phone' => [
+                'nullable',
+                'string',
+                'regex:/^(\+639|09)\d{9}$/',
+            ],
+        ], [
+            'phone.regex' => 'Phone number must be in the format 09XXXXXXXXX or +639XXXXXXXXX',
         ]);
 
         $isFirstUser = User::count() === 0;
@@ -68,7 +74,7 @@ class RegisteredUserController extends Controller
                 'name' => $request->name,
                 'email' => $request->email,
                 'phone' => $request->phone,
-                'status' => 'pending', // Set to pending until email verified
+                'status' => 'active', // Set to active (only valid values are 'active' or 'inactive')
             ]);
         }
 

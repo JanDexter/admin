@@ -31,12 +31,26 @@ class ProfileController extends Controller
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
         $user = $request->user();
-        $user->fill($request->validated());
-
-        if ($user->isDirty('email')) {
+        
+        // Check if email or phone is changing
+        $emailChanged = $user->email !== $request->email;
+        $phoneChanged = $user->phone !== $request->phone;
+        
+        // If email is changing, require re-verification
+        if ($emailChanged) {
+            // Store pending email change in session for verification flow
+            session(['pending_email_change' => $request->email]);
             $user->email_verified_at = null;
+            
+            // Send verification email to NEW address
+            $user->email = $request->email;
+            $user->sendEmailVerificationNotification();
+            
+            return back()->with('status', 'email-verification-sent');
         }
-
+        
+        // Update basic fields
+        $user->fill($request->only(['name', 'phone']));
         $user->save();
 
         // Also update the associated Customer record if exists
@@ -45,7 +59,7 @@ class ProfileController extends Controller
             if ($customer) {
                 $customer->update([
                     'name' => $request->name,
-                    'email' => $request->email,
+                    'email' => $user->email, // Use current user email, not the request
                     'phone' => $request->phone,
                     'company_name' => $request->company_name,
                 ]);
