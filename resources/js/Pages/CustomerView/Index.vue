@@ -8,6 +8,7 @@ import mayaLogo from '../../../img/customer_view/Maya_logo.svg';
 import SpaceCalendar from '../../Components/SpaceCalendar.vue';
 import ReservationDetailModal from '../../Components/ReservationDetailModal.vue';
 import PWAInstallButton from '../../Components/PWAInstallButton.vue';
+import PWADiagnostic from '../../Components/PWADiagnostic.vue';
 import OfflineDataView from '../../Components/OfflineDataView.vue';
 import { offlineStorage } from '../../utils/offlineStorage';
 // Removed payment logos; availability card no longer shown
@@ -2759,6 +2760,9 @@ const copyToClipboard = async (text, label = 'Text') => {
 
     <!-- PWA Install Button -->
     <PWAInstallButton />
+    
+    <!-- PWA Diagnostic Tool (for debugging) -->
+    <PWADiagnostic />
 </template>
 
 <style scoped>
